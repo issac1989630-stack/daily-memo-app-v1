@@ -47,8 +47,8 @@ function PasswordModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // 預設密碼：1234
-    if (password === '1234') {
+    // 預設密碼：2026
+    if (password === '2026') {
       onSuccess();
       onClose();
     } else {
@@ -108,7 +108,7 @@ function PasswordModal({
               )}
               autoFocus
             />
-            {error && <p className="text-red-300 text-sm mt-3 font-bold">密碼錯誤，請重試 (預設: 1234)</p>}
+            {error && <p className="text-red-300 text-sm mt-3 font-bold">密碼錯誤，請重試 (預設: 2026)</p>}
           </div>
 
           <button
