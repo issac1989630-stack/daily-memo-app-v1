@@ -149,6 +149,7 @@ export default function App() {
   // Edit state
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskText, setEditTaskText] = useState('');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Fetch from Supabase
   const fetchTasks = async () => {
@@ -159,6 +160,7 @@ export default function App() {
     
     if (error) {
       console.error('Error fetching tasks from Supabase:', error);
+      setStatusMessage(`讀取資料失敗：${error.message}`);
     } else if (data) {
       setTasks(data);
     }
@@ -208,8 +210,15 @@ export default function App() {
 
     if (error) {
       console.error('Error creating task:', error);
+      setStatusMessage(`新增任務失敗：${error.message}`);
+      setNewTaskText(newTaskTextClean); // Restore text
     } else if (data) {
-      setTasks(prev => [...prev, data[0]]);
+      setTasks(prev => {
+        // Prevent duplicate updates if realtime channel already added it
+        if (prev.some(t => t.id === data[0].id)) return prev;
+        return [...prev, data[0]];
+      });
+      setStatusMessage(null);
     }
   };
 
@@ -527,6 +536,12 @@ export default function App() {
         </div>
 
         {/* Input Form / Batch Action Section */}
+        {statusMessage && (
+          <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-4 text-center z-50 font-bold">
+            {statusMessage}
+            <button onClick={() => setStatusMessage(null)} className="ml-4 underline">關閉</button>
+          </div>
+        )}
         {!isBatchMode ? (
           <div className="absolute sm:fixed bottom-6 left-4 right-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-4xl z-20">
             <form onSubmit={handleAddTask} className="flex gap-3 sm:gap-4 bg-white p-3 sm:p-4 rounded-[40px] shadow-2xl shadow-emerald-900/10 border border-emerald-100 items-center">
