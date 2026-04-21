@@ -379,7 +379,7 @@ export default function App() {
           {currentTasks.length > 0 && (
             <div className="flex justify-between items-center mb-4 px-2">
                <h2 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
-                 今日任務 <span className="bg-white px-2 py-0.5 rounded-full shadow-sm text-emerald-700">{currentTasks.length}</span>
+                事項 <span className="bg-white px-2 py-0.5 rounded-full shadow-sm text-emerald-700">{currentTasks.length}</span>
                </h2>
                {!isBatchMode ? (
                  <button 
@@ -512,7 +512,7 @@ export default function App() {
                             onClick={(e) => { e.stopPropagation(); handleVerifyClick(task.id); }}
                             className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full font-bold text-[10px] sm:text-xs transition-all cursor-pointer whitespace-nowrap border-2 border-dashed border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-600 active:scale-95 bg-transparent"
                           >
-                            家長簽名
+                            家長/老師簽名
                           </button>
                         )}
   
@@ -560,7 +560,7 @@ export default function App() {
                 disabled={!newTaskText.trim()}
                 className="bg-emerald-50 hover:bg-emerald-500 hover:text-white transition-all text-emerald-600 px-5 sm:px-8 py-3 rounded-full font-black text-xs sm:text-sm uppercase tracking-widest disabled:opacity-50 disabled:hover:bg-emerald-50 disabled:hover:text-emerald-600 active:scale-95 whitespace-nowrap"
               >
-                儲存任務
+                儲存事項
               </button>
             </form>
           </div>
