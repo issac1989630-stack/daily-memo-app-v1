@@ -240,7 +240,7 @@ export default function App() {
 
     const { data, error } = await supabase.from('tasks').insert([{
       text: newTaskTextClean,
-      date: formattedDateKey,
+      date: selectedDate, // 使用最新的 selectedDate 狀態
       is_completed: false,
       is_verified: false
     }]).select();
