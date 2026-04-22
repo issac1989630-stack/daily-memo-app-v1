@@ -681,64 +681,6 @@ export default function App() {
         ) : (
           <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0 mt-4">
              
-            {/* Rewards Input Form */}
-            <form onSubmit={handleAddReward} className="bg-white rounded-[32px] p-5 sm:p-6 shadow-xl shadow-amber-900/5 border-2 border-amber-50 mb-8 max-w-lg mx-auto">
-              <h2 className="text-xl font-black text-amber-900 mb-4 flex items-center justify-center gap-2">
-                <Star className="w-6 h-6 text-amber-400 fill-amber-400" /> 建立新獎勵約定
-              </h2>
-              
-              <div className="flex flex-col gap-2">
-                {/* 條件 - 完成事項 */}
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 focus-within:border-sky-300 focus-within:bg-sky-50 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center flex-shrink-0">
-                    <Target className="w-5 h-5 text-sky-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold tracking-wider text-sky-600 uppercase mb-0.5">完成事項 (我要做到...)</p>
-                    <input 
-                      type="text" 
-                      value={newGoalText}
-                      onChange={(e) => setNewGoalText(e.target.value)}
-                      placeholder="例：連續一星期自己執書包" 
-                      className="w-full bg-transparent outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300" 
-                    />
-                  </div>
-                </div>
-        
-                {/* 箭頭/連結 */}
-                <div className="flex justify-center -my-4 z-10 relative pointer-events-none">
-                   <div className="bg-white p-1.5 rounded-full shadow-sm border-2 border-amber-100">
-                      <ArrowDown className="w-5 h-5 text-amber-400" />
-                   </div>
-                </div>
-        
-                {/* 結果 - 獎勵項目 */}
-                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 focus-within:border-amber-300 focus-within:bg-amber-50 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <Gift className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold tracking-wider text-amber-600 uppercase mb-0.5">獎勵項目 (我可以得到...)</p>
-                    <input 
-                      type="text" 
-                      value={newRewardText}
-                      onChange={(e) => setNewRewardText(e.target.value)}
-                      placeholder="例：去冒險樂園玩100個代幣" 
-                      className="w-full bg-transparent outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300" 
-                    />
-                  </div>
-                </div>
-        
-                <button 
-                  type="submit"
-                  disabled={!newGoalText.trim() || !newRewardText.trim()}
-                  className="mt-4 w-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-4 rounded-2xl text-sm sm:text-base uppercase tracking-widest transition-colors shadow-sm disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Award className="w-5 h-5" /> 確定建立約定
-                </button>
-              </div>
-            </form>
-
             {/* List Rewards Header */}
             <div className="flex justify-between items-center mb-6 px-2">
               <h3 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
