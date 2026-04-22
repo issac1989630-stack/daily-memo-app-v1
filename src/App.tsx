@@ -145,11 +145,11 @@ function PasswordModal({
 // =============== MAIN APP ===============
 export default function App() {
   const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
   const [newTaskText, setNewTaskText] = useState('');
   
@@ -221,8 +221,8 @@ export default function App() {
     };
   }, []);
 
-  const formattedDateKey = format(selectedDate, 'yyyy-MM-dd');
-  const isToday = format(new Date(), 'yyyy-MM-dd') === formattedDateKey;
+  const formattedDateKey = selectedDate;
+  const isToday = new Date().toISOString().split('T')[0] === formattedDateKey;
 
   // Filter tasks for the selected date
   const currentTasks = tasks.filter(t => t.date === formattedDateKey);
@@ -465,19 +465,29 @@ export default function App() {
           </div>
           
           {/* Navigation Control */}
-          <div className="bg-white/60 backdrop-blur-sm rounded-full p-1.5 flex gap-1 shadow-sm border border-slate-100/50 self-start sm:self-center">
-            <button 
-              onClick={() => setActiveTab('TASKS')}
-              className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'TASKS' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:bg-white/50")}
-            >
-              <ListTodo className="w-4 h-4" /> 每日事項
-            </button>
-            <button 
-              onClick={() => setActiveTab('REWARDS')}
-              className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'REWARDS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
-            >
-              <Star className="w-4 h-4" /> 獎勵計劃
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {activeTab === 'TASKS' && (
+              <input 
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-white/60 backdrop-blur-sm rounded-full px-5 py-2.5 text-sm font-bold text-emerald-800 shadow-sm border border-slate-100/50 outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            )}
+            <div className="bg-white/60 backdrop-blur-sm rounded-full p-1.5 flex gap-1 shadow-sm border border-slate-100/50 self-start sm:self-center">
+              <button 
+                onClick={() => setActiveTab('TASKS')}
+                className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'TASKS' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:bg-white/50")}
+              >
+                <ListTodo className="w-4 h-4" /> 每日事項
+              </button>
+              <button 
+                onClick={() => setActiveTab('REWARDS')}
+                className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'REWARDS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
+              >
+                <Star className="w-4 h-4" /> 獎勵計劃
+              </button>
+            </div>
           </div>
         </header>
 
