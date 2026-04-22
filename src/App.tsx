@@ -425,7 +425,7 @@ export default function App() {
                       }
                     }}
                     className={cn(
-                      "bg-white rounded-[32px] p-5 sm:p-6 flex items-center shadow-sm border-l-8 transition-all duration-300",
+                      "bg-white rounded-2xl p-3 sm:p-4 flex items-center shadow-sm border-l-4 transition-all duration-300",
                       task.is_verified ? "border-emerald-400" : task.is_completed ? "border-sky-400" : "border-orange-400",
                       isBatchMode && !task.is_verified && "cursor-pointer hover:bg-emerald-50/50",
                       isBatchMode && batchSelectedIds.includes(task.id) && "ring-2 ring-emerald-400 bg-emerald-50"
@@ -433,10 +433,10 @@ export default function App() {
                   >
                     {/* Left: Student interaction toggle */}
                     {isBatchMode && !task.is_verified ? (
-                      <div className={cn("w-8 h-8 rounded-lg border-2 flex items-center justify-center mr-3 flex-shrink-0 transition-colors duration-300", 
+                      <div className={cn("w-6 h-6 rounded-md border-2 flex items-center justify-center mr-2 flex-shrink-0 transition-colors duration-300", 
                         batchSelectedIds.includes(task.id) ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300"
                       )}>
-                        {batchSelectedIds.includes(task.id) && <Check className="w-5 h-5" strokeWidth={3} />}
+                        {batchSelectedIds.includes(task.id) && <Check className="w-4 h-4" strokeWidth={3} />}
                       </div>
                     ) : (
                       <div
@@ -447,13 +447,13 @@ export default function App() {
                           }
                         }}
                         className={cn(
-                          "w-8 h-8 rounded-full border-2 flex items-center justify-center mr-3 flex-shrink-0 transition-colors duration-300",
+                          "w-6 h-6 rounded-full border-2 flex items-center justify-center mr-2 flex-shrink-0 transition-colors duration-300",
                           task.is_completed
                             ? "border-emerald-400 bg-emerald-50 cursor-default"
                             : "border-slate-200 hover:border-sky-400 cursor-pointer"
                         )}
                       >
-                        {task.is_completed && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
+                        {task.is_completed && <Check className="w-3 h-3 text-emerald-500" strokeWidth={3} />}
                       </div>
                     )}
 
