@@ -23,7 +23,7 @@ interface Task {
 
 interface Reward {
   id: string;
-  goal_text: string;
+  task_list: string[];
   reward_text: string;
   is_achieved: boolean;
   is_verified: boolean;
@@ -154,8 +154,13 @@ export default function App() {
   const [newTaskText, setNewTaskText] = useState('');
   
   // Rewards input state
-  const [newGoalText, setNewGoalText] = useState('');
   const [newRewardText, setNewRewardText] = useState('');
+  const [taskCount, setTaskCount] = useState<number>(1);
+  const [taskInputs, setTaskInputs] = useState<string[]>(['']);
+  const [isRewardModalOpen, setIsRewardModalOpen] = useState(false);
+
+  // Rewards input state removed/re-purposed
+  const [newGoalText, setNewGoalText] = useState('');
 
   // Modal & Batch state
   const [modalAction, setModalAction] = useState<{ type: 'VERIFY' | 'UNVERIFY', ids: string[], context?: 'TASKS' | 'REWARDS' } | null>(null);
@@ -369,33 +374,41 @@ export default function App() {
   };
 
   // =============== REWARD FUNCTIONS ===============
+  // =============== REWARD FUNCTIONS ===============
+  const handleAddTaskInput = (index: number, value: string) => {
+    const newInputs = [...taskInputs];
+    newInputs[index] = value;
+    setTaskInputs(newInputs);
+  };
+
+  const setTaskCountAndInputs = (count: number) => {
+    setTaskCount(count);
+    setTaskInputs(Array(count).fill(''));
+  };
+
   const handleAddReward = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGoalText.trim() || !newRewardText.trim()) return;
+    const tasks = taskInputs.filter(t => t.trim() !== '');
+    if (tasks.length === 0 || !newRewardText.trim()) return;
 
-    const goal = newGoalText.trim();
-    const reward = newRewardText.trim();
-
-    setNewGoalText('');
-    setNewRewardText('');
-
-    const { data, error } = await supabase.from('rewards').insert([{
-      goal_text: goal,
-      reward_text: reward,
+    const rewardData = {
+      task_list: tasks,
+      reward_text: newRewardText.trim(),
       is_achieved: false,
       is_verified: false
-    }]).select();
+    };
+
+    setNewRewardText('');
+    setTaskCountAndInputs(1);
+    setIsRewardModalOpen(false);
+
+    const { data, error } = await supabase.from('rewards').insert([rewardData]).select();
 
     if (error) {
       console.error('Error creating reward:', error);
-      setStatusMessage(`新增獎勵失敗：${error.message}\n(請確認你是否已經執行 SQL 建立 rewards 表格)`);
-      setNewGoalText(goal);
-      setNewRewardText(reward);
+      setStatusMessage(`新增獎勵失敗：${error.message}`);
     } else if (data) {
-      setRewards(prev => {
-        if (prev.some(r => r.id === data[0].id)) return prev;
-        return [...prev, data[0]];
-      });
+      setRewards(prev => [...prev, data[0]]);
       setStatusMessage(null);
     }
   };
@@ -726,12 +739,22 @@ export default function App() {
               </div>
             </form>
 
+            {/* List Rewards Header */}
+            <div className="flex justify-between items-center mb-6 px-2">
+              <h3 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
+                我的獎勵約定
+              </h3>
+              <button 
+                onClick={() => setIsRewardModalOpen(true)}
+                className="bg-amber-400 hover:bg-amber-500 text-amber-950 p-2 rounded-full shadow-lg active:scale-95 transition-all"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            </div>
+
             {/* List Rewards */}
             {rewards.length > 0 ? (
               <div className="space-y-4 max-w-lg mx-auto">
-                <h3 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2 mb-2 px-2">
-                  我的獎勵約定
-                </h3>
                 <AnimatePresence initial={false}>
                   {rewards.map(reward => (
                     <motion.div
@@ -765,9 +788,13 @@ export default function App() {
                         </div>
                         
                         <div className="flex-1 min-w-0 pr-12">
-                          <div className="flex items-center gap-1 mb-1 opacity-70">
-                            <Target className="w-3 h-3 text-sky-500" />
-                            <p className="text-xs font-bold text-slate-500 truncate">{reward.goal_text}</p>
+                          <div className="flex flex-col gap-1 mb-2 opacity-70">
+                            {reward.task_list.map((task, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <Target className="w-3 h-3 text-sky-500 flex-shrink-0" />
+                                <p className="text-xs font-bold text-slate-500 truncate">{task}</p>
+                              </div>
+                            ))}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Gift className="w-4 h-4 text-amber-500" />
@@ -830,6 +857,77 @@ export default function App() {
             onClose={() => setModalAction(null)}
             onSuccess={confirmModalAction}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Rewards Creation Modal */}
+      <AnimatePresence>
+        {isRewardModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-amber-950/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-lg rounded-[48px] p-6 shadow-2xl relative"
+            >
+              <button onClick={() => setIsRewardModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full">
+                <X className="w-6 h-6" />
+              </button>
+
+              <h2 className="text-xl font-black text-amber-900 mb-6 flex items-center gap-2">
+                <Star className="w-6 h-6 text-amber-400 fill-amber-400" /> 建立新獎勵約定
+              </h2>
+
+              <form onSubmit={handleAddReward} className="flex flex-col gap-4">
+                {/* 完成次數 */}
+                <div>
+                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">完成次數</label>
+                   <div className="flex gap-2">
+                     {[1, 2, 3].map(count => (
+                       <button
+                         type="button"
+                         key={count}
+                         onClick={() => setTaskCountAndInputs(count)}
+                         className={cn("flex-1 py-3 rounded-2xl font-black transition-all", taskCount === count ? "bg-amber-400 text-amber-950" : "bg-slate-100 text-slate-600")}
+                       >{count} 次</button>
+                     ))}
+                   </div>
+                </div>
+
+                {/* 完成事項 - 動態輸入 */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">完成事項</label>
+                  {taskInputs.map((input, i) => (
+                    <input 
+                      key={i}
+                      value={input}
+                      onChange={(e) => handleAddTaskInput(i, e.target.value)}
+                      placeholder={`第 ${i + 1} 個事項`}
+                      className="w-full bg-slate-50 p-4 rounded-xl border-2 border-slate-100 outline-none focus:border-sky-300 font-bold text-sm"
+                    />
+                  ))}
+                </div>
+
+                {/* 獎勵 */}
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">獎勵內容</label>
+                  <input
+                    value={newRewardText}
+                    onChange={(e) => setNewRewardText(e.target.value)}
+                    placeholder="例：去冒險樂園玩"
+                    className="w-full bg-slate-50 p-4 rounded-xl border-2 border-slate-100 outline-none focus:border-amber-300 font-bold text-sm"
+                  />
+                </div>
+
+                <button 
+                  type="submit"
+                  className="mt-4 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-4 rounded-2xl uppercase tracking-widest transition-colors active:scale-95"
+                >
+                  建立約定
+                </button>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
