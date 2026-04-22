@@ -408,6 +408,7 @@ export default function App() {
       console.error('Error creating reward:', error);
       setStatusMessage(`新增獎勵失敗：${error.message}`);
     } else if (data) {
+      console.log('Reward created successfully:', data);
       setRewards(prev => [...prev, data[0]]);
       setStatusMessage(null);
     }
