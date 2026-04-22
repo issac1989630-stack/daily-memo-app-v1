@@ -392,7 +392,7 @@ export default function App() {
     if (tasks.length === 0 || !newRewardText.trim()) return;
 
     const rewardData = {
-      task_list: tasks,
+      task_list: tasks.map(text => ({ text, completed: false })),
       reward_text: newRewardText.trim(),
       is_achieved: false,
       is_verified: false
@@ -409,9 +409,20 @@ export default function App() {
       setStatusMessage(`新增獎勵失敗：${error.message}`);
     } else if (data) {
       console.log('Reward created successfully:', data);
-      setRewards(prev => [...prev, data[0]]);
+      setRewards(prev => [data[0], ...prev]);
       setStatusMessage(null);
     }
+  };
+
+  const toggleTaskCompleted = async (rewardId: string, taskIndex: number) => {
+    setRewards(prev => prev.map(r => {
+      if (r.id !== rewardId) return r;
+      const newTaskList = Array.isArray(r.task_list) ? [...r.task_list.map((t: any) => typeof t === 'string' ? { text: t, completed: false } : t)] : [];
+      // @ts-ignore
+      newTaskList[taskIndex] = { ...newTaskList[taskIndex], completed: !newTaskList[taskIndex].completed };
+      const isAllCompleted = newTaskList.every((t: any) => t.completed);
+      return { ...r, task_list: newTaskList, is_achieved: isAllCompleted };
+    }));
   };
 
   const toggleRewardAchieved = async (rewardId: string) => {
@@ -732,10 +743,12 @@ export default function App() {
                         
                         <div className="flex-1 min-w-0 pr-12">
                           <div className="flex flex-col gap-1 mb-2 opacity-70">
-                            {reward.task_list.map((task, i) => (
-                              <div key={i} className="flex items-center gap-2">
-                                <Target className="w-3 h-3 text-sky-500 flex-shrink-0" />
-                                <p className="text-xs font-bold text-slate-500 truncate">{task}</p>
+                            {reward.task_list.map((task: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
+                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
+                                  {task.completed && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <p className={cn("text-xs font-bold truncate", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>{task.text}</p>
                               </div>
                             ))}
                           </div>
@@ -826,7 +839,7 @@ export default function App() {
                 <div>
                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">完成次數</label>
                    <div className="flex gap-2">
-                     {[1, 2, 3].map(count => (
+                     {[1, 2, 3, 4, 5].map(count => (
                        <button
                          type="button"
                          key={count}
