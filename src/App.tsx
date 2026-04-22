@@ -469,7 +469,9 @@ export default function App() {
             {activeTab === 'TASKS' && (
               <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm rounded-full px-5 py-2.5 shadow-sm border border-slate-100/50">
                 <button onClick={prevDay} className="p-1 hover:bg-slate-100 rounded-full"><ChevronLeft className="w-4 h-4 text-emerald-800" /></button>
-                <span className="text-sm font-bold text-emerald-800 tabular-nums">{selectedDate}</span>
+                <span className="text-sm font-bold text-emerald-800 tabular-nums">
+                  {format(parseISO(selectedDate), 'yyyy-MM-dd (EEEE)', { locale: zhTW })}
+                </span>
                 <button onClick={nextDay} className="p-1 hover:bg-slate-100 rounded-full"><ChevronRight className="w-4 h-4 text-emerald-800" /></button>
               </div>
             )}
