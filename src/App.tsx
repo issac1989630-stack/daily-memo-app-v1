@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays, subDays } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { Plus, Check, ShieldCheck, Lock, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks } from 'lucide-react';
+import { Plus, Check, ShieldCheck, Lock, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -19,6 +19,15 @@ interface Task {
   date: string; // YYYY-MM-DD
   is_completed: boolean;
   is_verified: boolean;
+}
+
+interface Reward {
+  id: string;
+  goal_text: string;
+  reward_text: string;
+  is_achieved: boolean;
+  is_verified: boolean;
+  created_at?: string;
 }
 
 // =============== MODAL COMPONENT ===============
@@ -135,14 +144,21 @@ function PasswordModal({
 
 // =============== MAIN APP ===============
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
+
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
   const [newTaskText, setNewTaskText] = useState('');
   
+  // Rewards input state
+  const [newGoalText, setNewGoalText] = useState('');
+  const [newRewardText, setNewRewardText] = useState('');
+
   // Modal & Batch state
-  const [modalAction, setModalAction] = useState<{ type: 'VERIFY' | 'UNVERIFY', ids: string[] } | null>(null);
+  const [modalAction, setModalAction] = useState<{ type: 'VERIFY' | 'UNVERIFY', ids: string[], context?: 'TASKS' | 'REWARDS' } | null>(null);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
   
@@ -152,35 +168,51 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Fetch from Supabase
-  const fetchTasks = async () => {
-    const { data, error } = await supabase
+  const fetchData = async () => {
+    // Fetch tasks
+    const { data: tasksData, error: tasksError } = await supabase
       .from('tasks')
       .select('*')
       .order('created_at', { ascending: true });
     
-    if (error) {
-      console.error('Error fetching tasks from Supabase:', error);
-      setStatusMessage(`讀取資料失敗：${error.message}`);
-    } else if (data) {
-      setTasks(data);
+    if (tasksError) {
+      console.error('Error fetching tasks from Supabase:', tasksError);
+      setStatusMessage(`讀取任務失敗：${tasksError.message}`);
+    } else if (tasksData) {
+      setTasks(tasksData);
     }
+
+    // Fetch rewards
+    const { data: rewardsData, error: rewardsError } = await supabase
+      .from('rewards')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (rewardsError) {
+      // Don't status alert to not block UI if table isn't created yet
+      console.error('Error fetching rewards (table might not exist yet):', rewardsError);
+    } else if (rewardsData) {
+      setRewards(rewardsData);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchTasks();
+    fetchData();
 
     // Subscribe to realtime changes
-    const subscription = supabase
-      .channel('public:tasks')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
-        // Simple automatic refetch on any change to keep devices synced
-        fetchTasks();
-      })
+    const taskSub = supabase.channel('public:tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => fetchData())
+      .subscribe();
+
+    const rewardSub = supabase.channel('public:rewards')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rewards' }, () => fetchData())
       .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(taskSub);
+      supabase.removeChannel(rewardSub);
     };
   }, []);
 
@@ -239,11 +271,11 @@ export default function App() {
       .update({ is_completed: !task.is_completed })
       .eq('id', taskId);
       
-    if (error) {
-      console.error('Error updating task:', error);
-      fetchTasks(); // rollback on error
-    }
-  };
+      if (error) {
+        console.error('Error updating task:', error);
+        fetchData(); // rollback on error
+      }
+    };
 
   const handleVerifyClick = (taskId: string) => {
     setModalAction({ type: 'VERIFY', ids: [taskId] });
@@ -263,124 +295,176 @@ export default function App() {
     if (!modalAction) return;
     const isVerify = modalAction.type === 'VERIFY';
     const ids = modalAction.ids;
+    const isRewards = modalAction.context === 'REWARDS';
 
     // Optimistic UI
-    setTasks(prev => prev.map(t => {
-      if (ids.includes(t.id)) {
-        return { ...t, is_verified: isVerify };
-      }
-      return t;
-    }));
+    if (isRewards) {
+      setRewards(prev => prev.map(t => {
+        if (ids.includes(t.id)) return { ...t, is_verified: isVerify };
+        return t;
+      }));
+    } else {
+      setTasks(prev => prev.map(t => {
+        if (ids.includes(t.id)) return { ...t, is_verified: isVerify };
+        return t;
+      }));
+    }
 
     setModalAction(null);
     setIsBatchMode(false);
     setBatchSelectedIds([]);
 
+    const table = isRewards ? 'rewards' : 'tasks';
     const { error } = await supabase
-      .from('tasks')
+      .from(table)
       .update({ is_verified: isVerify })
       .in('id', ids);
 
     if (error) {
       console.error('Error batch updating verification status:', error);
-      fetchTasks(); // rollback
+      fetchData(); // rollback
     }
   };
-
-  const deleteTask = async (taskId: string) => {
-    // Optimistic update
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', taskId);
+  
+    const deleteTask = async (taskId: string) => {
+      // Optimistic update
+      setTasks(prev => prev.filter(t => t.id !== taskId));
       
-    if (error) {
-      console.error('Error deleting task:', error);
-      fetchTasks();
-    }
-  };
-
-  const startEditing = (task: Task) => {
-    setEditingTaskId(task.id);
-    setEditTaskText(task.text);
-  };
-
-  const saveEdit = async (taskId: string) => {
-    const newText = editTaskText.trim();
-    // Optimistic UI
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, text: newText } : t));
-    setEditingTaskId(null);
-
-    const { error } = await supabase
-      .from('tasks')
-      .update({ text: newText })
-      .eq('id', taskId);
-
-    if (error) {
-      console.error('Error updating task text:', error);
-      fetchTasks();
-    }
-  };
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+        
+      if (error) {
+        console.error('Error deleting task:', error);
+        fetchData();
+      }
+    };
+  
+    const startEditing = (task: Task) => {
+      setEditingTaskId(task.id);
+      setEditTaskText(task.text);
+    };
+  
+    const saveEdit = async (taskId: string) => {
+      const newText = editTaskText.trim();
+      // Optimistic UI
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, text: newText } : t));
+      setEditingTaskId(null);
+  
+      const { error } = await supabase
+        .from('tasks')
+        .update({ text: newText })
+        .eq('id', taskId);
+  
+      if (error) {
+        console.error('Error updating task text:', error);
+        fetchData();
+      }
+    };
 
   const cancelEdit = () => {
     setEditingTaskId(null);
     setEditTaskText('');
   };
 
+  // =============== REWARD FUNCTIONS ===============
+  const handleAddReward = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGoalText.trim() || !newRewardText.trim()) return;
+
+    const goal = newGoalText.trim();
+    const reward = newRewardText.trim();
+
+    setNewGoalText('');
+    setNewRewardText('');
+
+    const { data, error } = await supabase.from('rewards').insert([{
+      goal_text: goal,
+      reward_text: reward,
+      is_achieved: false,
+      is_verified: false
+    }]).select();
+
+    if (error) {
+      console.error('Error creating reward:', error);
+      setStatusMessage(`新增獎勵失敗：${error.message}\n(請確認你是否已經執行 SQL 建立 rewards 表格)`);
+      setNewGoalText(goal);
+      setNewRewardText(reward);
+    } else if (data) {
+      setRewards(prev => {
+        if (prev.some(r => r.id === data[0].id)) return prev;
+        return [...prev, data[0]];
+      });
+      setStatusMessage(null);
+    }
+  };
+
+  const toggleRewardAchieved = async (rewardId: string) => {
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) return;
+    
+    // Optimistic
+    setRewards(prev => prev.map(r => r.id === rewardId ? { ...r, is_achieved: !r.is_achieved } : r));
+
+    const { error } = await supabase.from('rewards').update({ is_achieved: !reward.is_achieved }).eq('id', rewardId);
+    if (error) fetchData();
+  };
+
+  const deleteReward = async (rewardId: string) => {
+    setRewards(prev => prev.filter(r => r.id !== rewardId));
+    const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
+    if (error) fetchData();
+  };
+
+  const handleVerifyRewardClick = (rewardId: string) => {
+    setModalAction({ type: 'VERIFY', ids: [rewardId], context: 'REWARDS' });
+  };
+
   return (
-    <div className="min-h-[100dvh] bg-[#F0FDF4] text-slate-800 font-sans sm:p-8 flex justify-center overflow-x-hidden relative">
+    <div className={cn("min-h-[100dvh] text-slate-800 font-sans sm:p-8 flex justify-center overflow-x-hidden relative transition-colors duration-500", activeTab === 'TASKS' ? "bg-[#F0FDF4]" : "bg-[#FFFBEB]")}>
       <div className="w-full max-w-5xl flex flex-col gap-6 sm:gap-8 h-full min-h-[90vh] z-10 relative">
 
         {/* Decorative Background Text */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-5 sm:opacity-[0.03] z-0 hidden lg:block">
-          <p className="text-[200px] font-black text-emerald-900 origin-center whitespace-nowrap rotate-12">PLANNER</p>
+          <p className={cn("text-[200px] font-black origin-center whitespace-nowrap rotate-12 transition-colors", activeTab === 'TASKS' ? "text-emerald-900" : "text-amber-900")}>
+            {activeTab === 'TASKS' ? 'PLANNER' : 'REWARDS'}
+          </p>
         </div>
 
         {/* Header Section */}
         <header className="flex flex-col sm:flex-row justify-between sm:items-end gap-6 relative z-10 px-4 sm:px-0 pt-6 sm:pt-0">
           <div>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tighter text-emerald-900 mb-1">張薪濠每日備忘錄</h1>
-            <p className="text-emerald-600 font-medium tracking-wide uppercase text-[10px] sm:text-sm">Hao-Xin Chang's Daily Memo</p>
+            <h1 className={cn("text-4xl sm:text-5xl font-black tracking-tighter mb-1 transition-colors", activeTab === 'TASKS' ? "text-emerald-900" : "text-amber-900")}>張薪濠每日備忘錄</h1>
+            <p className={cn("font-medium tracking-wide uppercase text-[10px] sm:text-sm transition-colors", activeTab === 'TASKS' ? "text-emerald-600" : "text-amber-600")}>Hao-Xin Chang's Daily Memo</p>
           </div>
-          <div className="bg-white rounded-[32px] px-6 py-3 shadow-sm border border-emerald-100 flex items-center justify-between sm:justify-start gap-4">
-            <button onClick={prevDay} className="p-2 -ml-2 hover:bg-emerald-50 rounded-full transition-colors text-emerald-600 hover:text-emerald-800">
-              <ChevronLeft className="w-6 h-6 stroke-[3]" />
+          
+          {/* Navigation Control */}
+          <div className="bg-white/60 backdrop-blur-sm rounded-full p-1.5 flex gap-1 shadow-sm border border-slate-100/50 self-start sm:self-center">
+            <button 
+              onClick={() => setActiveTab('TASKS')}
+              className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'TASKS' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:bg-white/50")}
+            >
+              <ListTodo className="w-4 h-4" /> 每日事項
             </button>
-            
-            <div className="flex items-center gap-4">
-              <span className="text-3xl font-bold text-emerald-600 tracking-tight">{format(selectedDate, 'MM/dd')}</span>
-              <div className="h-8 w-px bg-emerald-100 hidden sm:block"></div>
-              <div className="text-right flex flex-col justify-center">
-                <p className="text-xs font-bold text-slate-400 leading-none mb-1">{format(selectedDate, 'EEEE', { locale: zhTW })}</p>
-                <div className="flex justify-end items-center gap-2">
-                  {!isToday && (
-                    <button onClick={goToToday} className="text-[10px] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 px-2 py-0.5 rounded-full font-bold transition-colors">
-                      回今日
-                    </button>
-                  )}
-                  <p className="text-[11px] sm:text-sm font-semibold text-slate-600 uppercase">
-                    {format(selectedDate, 'MMM yyyy')}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button onClick={nextDay} className="p-2 -mr-2 hover:bg-emerald-50 rounded-full transition-colors text-emerald-600 hover:text-emerald-800">
-              <ChevronRight className="w-6 h-6 stroke-[3]" />
+            <button 
+              onClick={() => setActiveTab('REWARDS')}
+              className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'REWARDS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
+            >
+              <Star className="w-4 h-4" /> 獎勵計劃
             </button>
           </div>
         </header>
 
-        {/* Task List Section */}
-        <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0">
-          
-          {currentTasks.length > 0 && (
-            <div className="flex justify-between items-center mb-4 px-2">
-               <h2 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
-                事項 <span className="bg-white px-2 py-0.5 rounded-full shadow-sm text-emerald-700">{currentTasks.length}</span>
-               </h2>
+        {activeTab === 'TASKS' ? (
+          <>
+          <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0">
+            
+            {currentTasks.length > 0 && (
+              <div className="flex justify-between items-center mb-4 px-2">
+                 <h2 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
+                  事項 <span className="bg-white px-2 py-0.5 rounded-full shadow-sm text-emerald-700">{currentTasks.length}</span>
+                 </h2>
                {!isBatchMode ? (
                  <button 
                    onClick={() => { setIsBatchMode(true); setBatchSelectedIds([]); }}
@@ -579,6 +663,161 @@ export default function App() {
                 <ShieldCheck className="w-5 h-5" /> 一鍵核可
               </button>
            </motion.div>
+        )}
+        </>
+        ) : (
+          <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0 mt-4">
+             
+            {/* Rewards Input Form */}
+            <form onSubmit={handleAddReward} className="bg-white rounded-[32px] p-5 sm:p-6 shadow-xl shadow-amber-900/5 border-2 border-amber-50 mb-8 max-w-lg mx-auto">
+              <h2 className="text-xl font-black text-amber-900 mb-4 flex items-center justify-center gap-2">
+                <Star className="w-6 h-6 text-amber-400 fill-amber-400" /> 建立新獎勵約定
+              </h2>
+              
+              <div className="flex flex-col gap-2">
+                {/* 條件 - 完成事項 */}
+                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 focus-within:border-sky-300 focus-within:bg-sky-50 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-sky-100 flex items-center justify-center flex-shrink-0">
+                    <Target className="w-5 h-5 text-sky-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold tracking-wider text-sky-600 uppercase mb-0.5">完成事項 (我要做到...)</p>
+                    <input 
+                      type="text" 
+                      value={newGoalText}
+                      onChange={(e) => setNewGoalText(e.target.value)}
+                      placeholder="例：連續一星期自己執書包" 
+                      className="w-full bg-transparent outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300" 
+                    />
+                  </div>
+                </div>
+        
+                {/* 箭頭/連結 */}
+                <div className="flex justify-center -my-4 z-10 relative pointer-events-none">
+                   <div className="bg-white p-1.5 rounded-full shadow-sm border-2 border-amber-100">
+                      <ArrowDown className="w-5 h-5 text-amber-400" />
+                   </div>
+                </div>
+        
+                {/* 結果 - 獎勵項目 */}
+                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 focus-within:border-amber-300 focus-within:bg-amber-50 transition-colors">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <Gift className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold tracking-wider text-amber-600 uppercase mb-0.5">獎勵項目 (我可以得到...)</p>
+                    <input 
+                      type="text" 
+                      value={newRewardText}
+                      onChange={(e) => setNewRewardText(e.target.value)}
+                      placeholder="例：去冒險樂園玩100個代幣" 
+                      className="w-full bg-transparent outline-none text-sm font-bold text-slate-700 placeholder:text-slate-300" 
+                    />
+                  </div>
+                </div>
+        
+                <button 
+                  type="submit"
+                  disabled={!newGoalText.trim() || !newRewardText.trim()}
+                  className="mt-4 w-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-4 rounded-2xl text-sm sm:text-base uppercase tracking-widest transition-colors shadow-sm disabled:opacity-50 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Award className="w-5 h-5" /> 確定建立約定
+                </button>
+              </div>
+            </form>
+
+            {/* List Rewards */}
+            {rewards.length > 0 ? (
+              <div className="space-y-4 max-w-lg mx-auto">
+                <h3 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2 mb-2 px-2">
+                  我的獎勵約定
+                </h3>
+                <AnimatePresence initial={false}>
+                  {rewards.map(reward => (
+                    <motion.div
+                      key={reward.id}
+                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                      layout
+                      className={cn(
+                        "bg-white rounded-[24px] p-4 flex flex-col gap-3 shadow-sm border-2 transition-all duration-300 relative overflow-hidden",
+                        reward.is_verified ? "border-amber-400" : reward.is_achieved ? "border-sky-400" : "border-slate-100"
+                      )}
+                    >
+                      {reward.is_verified && (
+                        <div className="absolute top-0 right-0 bg-amber-400 text-amber-950 text-[10px] font-black px-3 py-1 rounded-bl-lg flex items-center gap-1">
+                          <Check className="w-3 h-3 stroke-[3]" /> 已兌現
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-4">
+                        <div
+                          onClick={() => toggleRewardAchieved(reward.id)}
+                          className={cn(
+                            "w-8 h-8 rounded-full border-2 flex items-center justify-center mt-1 flex-shrink-0 transition-colors duration-300",
+                            reward.is_achieved || reward.is_verified
+                              ? "border-emerald-400 bg-emerald-50 cursor-default"
+                              : "border-slate-200 hover:border-sky-400 cursor-pointer"
+                          )}
+                        >
+                          {(reward.is_achieved || reward.is_verified) && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0 pr-12">
+                          <div className="flex items-center gap-1 mb-1 opacity-70">
+                            <Target className="w-3 h-3 text-sky-500" />
+                            <p className="text-xs font-bold text-slate-500 truncate">{reward.goal_text}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Gift className="w-4 h-4 text-amber-500" />
+                            <h3 className={cn("text-base font-bold truncate transition-all duration-300",
+                              reward.is_verified ? "text-slate-400 decoration-amber-200 decoration-2 line-through" : "text-amber-900"
+                            )}>
+                              {reward.reward_text}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                        {reward.is_verified ? (
+                           <button
+                             onClick={(e) => { e.stopPropagation(); setModalAction({ type: 'UNVERIFY', ids: [reward.id], context: 'REWARDS'}); }}
+                             className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors"
+                           >
+                             <RotateCcw className="w-4 h-4" />
+                           </button>
+                        ) : reward.is_achieved ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleVerifyRewardClick(reward.id); }}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-full font-bold text-xs transition-all flex items-center gap-1"
+                          >
+                            <ShieldCheck className="w-3 h-3" /> 家長核可
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteReward(reward.id); }}
+                            className="p-1.5 text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 mt-4 rounded-[40px] border-4 border-dashed border-amber-200/50 bg-amber-50/50 max-w-lg mx-auto">
+                <Gift className="w-12 h-12 text-amber-300 mb-3" />
+                <p className="font-black text-lg text-amber-800">未有任何獎勵約定</p>
+                <p className="text-xs font-bold text-amber-600/70 uppercase mb-2">Create your first reward plan</p>
+              </div>
+            )}
+
+          </div>
         )}
       </div>
 
