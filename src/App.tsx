@@ -433,10 +433,10 @@ export default function App() {
                   >
                     {/* Left: Student interaction toggle */}
                     {isBatchMode && !task.is_verified ? (
-                      <div className={cn("w-10 h-10 rounded-xl border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors duration-300", 
+                      <div className={cn("w-8 h-8 rounded-lg border-2 flex items-center justify-center mr-3 flex-shrink-0 transition-colors duration-300", 
                         batchSelectedIds.includes(task.id) ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300"
                       )}>
-                        {batchSelectedIds.includes(task.id) && <Check className="w-6 h-6" strokeWidth={3} />}
+                        {batchSelectedIds.includes(task.id) && <Check className="w-5 h-5" strokeWidth={3} />}
                       </div>
                     ) : (
                       <div
@@ -447,39 +447,39 @@ export default function App() {
                           }
                         }}
                         className={cn(
-                          "w-10 h-10 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors duration-300",
+                          "w-8 h-8 rounded-full border-2 flex items-center justify-center mr-3 flex-shrink-0 transition-colors duration-300",
                           task.is_completed
                             ? "border-emerald-400 bg-emerald-50 cursor-default"
                             : "border-slate-200 hover:border-sky-400 cursor-pointer"
                         )}
                       >
-                        {task.is_completed && <Check className="w-5 h-5 text-emerald-500" strokeWidth={3} />}
+                        {task.is_completed && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
                       </div>
                     )}
 
                     {/* Content */}
-                    <div className="flex-1 min-w-0 mr-4">
+                    <div className="flex-1 min-w-0 mr-3">
                       {editingTaskId === task.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <input
                             type="text"
                             value={editTaskText}
                             onChange={(e) => setEditTaskText(e.target.value)}
-                            className="flex-1 bg-white border-2 border-emerald-300 rounded-lg p-2 text-slate-800 text-lg font-bold outline-none"
+                            className="flex-1 bg-white border-2 border-emerald-300 rounded-lg p-1.5 text-slate-800 text-sm font-bold outline-none"
                           />
-                          <button onClick={() => saveEdit(task.id)} className="text-emerald-600 font-bold text-xs p-2 hover:bg-emerald-100 rounded-lg">保存</button>
-                          <button onClick={cancelEdit} className="text-slate-400 font-bold text-xs p-2 hover:bg-slate-100 rounded-lg">取消</button>
+                          <button onClick={() => saveEdit(task.id)} className="text-emerald-600 font-bold text-[10px] p-1.5 hover:bg-emerald-100 rounded-lg">保存</button>
+                          <button onClick={cancelEdit} className="text-slate-400 font-bold text-[10px] p-1.5 hover:bg-slate-100 rounded-lg">取消</button>
                         </div>
                       ) : (
                         <>
                           <h3 onClick={() => startEditing(task)} className={cn(
-                            "text-lg font-bold truncate transition-all duration-300 cursor-pointer hover:text-emerald-700",
+                            "text-sm sm:text-base font-bold whitespace-normal break-words transition-all duration-300 cursor-pointer hover:text-emerald-700 leading-tight",
                             task.is_completed ? "text-slate-400 line-through decoration-emerald-200 decoration-2" : "text-slate-800"
                           )}>
                             {task.text}
                           </h3>
                           <p className={cn(
-                            "text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1",
+                            "text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5",
                             task.is_verified ? "text-emerald-500" : task.is_completed ? "text-sky-500" : "text-slate-400"
                           )}>
                             {task.is_verified && task.is_completed ? "已核可 • 已完成" : 
