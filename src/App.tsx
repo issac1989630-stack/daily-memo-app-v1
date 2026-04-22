@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { Plus, Check, ShieldCheck, Lock, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -227,9 +227,9 @@ export default function App() {
   // Filter tasks for the selected date
   const currentTasks = tasks.filter(t => t.date === formattedDateKey);
 
-  const nextDay = () => setSelectedDate(prev => addDays(prev, 1));
-  const prevDay = () => setSelectedDate(prev => subDays(prev, 1));
-  const goToToday = () => setSelectedDate(new Date());
+  const nextDay = () => setSelectedDate(prev => format(addDays(parseISO(prev), 1), 'yyyy-MM-dd'));
+  const prevDay = () => setSelectedDate(prev => format(subDays(parseISO(prev), 1), 'yyyy-MM-dd'));
+  const goToToday = () => setSelectedDate(new Date().toISOString().split('T')[0]);
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -467,12 +467,11 @@ export default function App() {
           {/* Navigation Control */}
           <div className="flex flex-col sm:flex-row gap-4">
             {activeTab === 'TASKS' && (
-              <input 
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-white/60 backdrop-blur-sm rounded-full px-5 py-2.5 text-sm font-bold text-emerald-800 shadow-sm border border-slate-100/50 outline-none focus:ring-2 focus:ring-emerald-400"
-              />
+              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm rounded-full px-5 py-2.5 shadow-sm border border-slate-100/50">
+                <button onClick={prevDay} className="p-1 hover:bg-slate-100 rounded-full"><ChevronLeft className="w-4 h-4 text-emerald-800" /></button>
+                <span className="text-sm font-bold text-emerald-800 tabular-nums">{selectedDate}</span>
+                <button onClick={nextDay} className="p-1 hover:bg-slate-100 rounded-full"><ChevronRight className="w-4 h-4 text-emerald-800" /></button>
+              </div>
             )}
             <div className="bg-white/60 backdrop-blur-sm rounded-full p-1.5 flex gap-1 shadow-sm border border-slate-100/50 self-start sm:self-center">
               <button 
