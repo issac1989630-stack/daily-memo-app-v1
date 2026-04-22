@@ -145,7 +145,7 @@ function PasswordModal({
 // =============== MAIN APP ===============
 export default function App() {
   const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
