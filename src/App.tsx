@@ -415,23 +415,36 @@ export default function App() {
   };
 
   const toggleTaskCompleted = async (rewardId: string, taskIndex: number) => {
-    let updatedReward: any;
-    
-    setRewards(prev => prev.map(r => {
-      if (r.id !== rewardId) return r;
-      const newTaskList = Array.isArray(r.task_list) ? [...r.task_list.map((t: any) => typeof t === 'string' ? { text: t, completed: false } : t)] : [];
-      // @ts-ignore
-      newTaskList[taskIndex] = { ...newTaskList[taskIndex], completed: !newTaskList[taskIndex].completed };
-      const isAllCompleted = newTaskList.every((t: any) => t.completed);
-      updatedReward = { ...r, task_list: newTaskList, is_achieved: isAllCompleted };
-      return updatedReward;
-    }));
+    // Find the reward
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) return;
 
-    if (updatedReward) {
-      await supabase
-        .from('rewards')
-        .update({ task_list: updatedReward.task_list, is_achieved: updatedReward.is_achieved })
-        .eq('id', rewardId);
+    // Build the new task list
+    const newTaskList = Array.isArray(reward.task_list) 
+      ? [...reward.task_list.map((t: any) => typeof t === 'string' ? { text: t, completed: false } : t)] 
+      : [];
+    
+    // Toggle the selected task
+    if (newTaskList[taskIndex]) {
+      newTaskList[taskIndex] = { ...newTaskList[taskIndex], completed: !newTaskList[taskIndex].completed };
+    }
+
+    // Check if achieved
+    const isAllCompleted = newTaskList.length > 0 && newTaskList.every((t: any) => t.completed);
+
+    // Optimistically update UI
+    setRewards(prev => prev.map(r => r.id === rewardId ? { ...r, task_list: newTaskList, is_achieved: isAllCompleted } : r));
+
+    // Update Supabase
+    const { error } = await supabase
+      .from('rewards')
+      .update({ task_list: newTaskList, is_achieved: isAllCompleted })
+      .eq('id', rewardId);
+      
+    if (error) {
+      console.error('Error updating reward tasks:', error);
+      // Revert if error
+      fetchData();
     }
   };
 
