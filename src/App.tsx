@@ -415,14 +415,24 @@ export default function App() {
   };
 
   const toggleTaskCompleted = async (rewardId: string, taskIndex: number) => {
+    let updatedReward: any;
+    
     setRewards(prev => prev.map(r => {
       if (r.id !== rewardId) return r;
       const newTaskList = Array.isArray(r.task_list) ? [...r.task_list.map((t: any) => typeof t === 'string' ? { text: t, completed: false } : t)] : [];
       // @ts-ignore
       newTaskList[taskIndex] = { ...newTaskList[taskIndex], completed: !newTaskList[taskIndex].completed };
       const isAllCompleted = newTaskList.every((t: any) => t.completed);
-      return { ...r, task_list: newTaskList, is_achieved: isAllCompleted };
+      updatedReward = { ...r, task_list: newTaskList, is_achieved: isAllCompleted };
+      return updatedReward;
     }));
+
+    if (updatedReward) {
+      await supabase
+        .from('rewards')
+        .update({ task_list: updatedReward.task_list, is_achieved: updatedReward.is_achieved })
+        .eq('id', rewardId);
+    }
   };
 
   const toggleRewardAchieved = async (rewardId: string) => {
