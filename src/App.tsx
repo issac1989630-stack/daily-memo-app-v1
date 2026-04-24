@@ -191,7 +191,7 @@ export default function App() {
     const { data: rewardsData, error: rewardsError } = await supabase
       .from('rewards')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
     
     if (rewardsError) {
       // Don't status alert to not block UI if table isn't created yet
