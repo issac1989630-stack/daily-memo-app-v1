@@ -762,11 +762,11 @@ export default function App() {
                         </div>
                       )}
 
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4">
                         <div
                           onClick={() => toggleRewardAchieved(reward.id)}
                           className={cn(
-                            "w-8 h-8 rounded-full border-2 flex items-center justify-center mt-1 flex-shrink-0 transition-colors duration-300",
+                            "w-8 h-8 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 transition-colors duration-300",
                             reward.is_achieved || reward.is_verified
                               ? "border-emerald-400 bg-emerald-50 cursor-default"
                               : "border-slate-200 hover:border-sky-400 cursor-pointer"
@@ -775,20 +775,20 @@ export default function App() {
                           {(reward.is_achieved || reward.is_verified) && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
                         </div>
                         
-                        <div className="flex-1 min-w-0 pr-12">
-                          <div className="flex flex-col gap-1 mb-2 opacity-70">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col gap-1.5 mb-2 opacity-75">
                             {reward.task_list.map((task: any, i: number) => (
-                              <div key={i} className="flex items-center gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
-                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
+                              <div key={i} className="flex items-start gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
+                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
                                   {task.completed && <Check className="w-3 h-3 text-white" />}
                                 </div>
-                                <p className={cn("text-xs font-bold truncate", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>{task.text}</p>
+                                <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>{task.text}</p>
                               </div>
                             ))}
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Gift className="w-4 h-4 text-amber-500" />
-                            <h3 className={cn("text-base font-bold truncate transition-all duration-300",
+                          <div className="flex items-start gap-1.5">
+                            <Gift className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <h3 className={cn("text-sm sm:text-base font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-snug transition-all duration-300",
                               reward.is_verified ? "text-slate-400 decoration-amber-200 decoration-2 line-through" : "text-amber-900"
                             )}>
                               {reward.reward_text}
@@ -797,26 +797,29 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Right: Actions */}
-                      <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                      {/* Card Footer Actions */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80 mt-1">
                         {reward.is_verified ? (
                            <button
                              onClick={(e) => { e.stopPropagation(); setModalAction({ type: 'UNVERIFY', ids: [reward.id], context: 'REWARDS'}); }}
-                             className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors"
+                             className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors flex items-center gap-1 text-xs font-bold"
+                             title="取消核可"
                            >
                              <RotateCcw className="w-4 h-4" />
+                             <span className="text-[11px]">重設</span>
                            </button>
                         ) : reward.is_achieved ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleVerifyRewardClick(reward.id); }}
                             className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-full font-bold text-xs transition-all flex items-center gap-1"
                           >
-                            <ShieldCheck className="w-3 h-3" /> 家長核可
+                            <ShieldCheck className="w-3.5 h-3.5" /> 家長核可
                           </button>
                         ) : (
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteReward(reward.id); }}
                             className="p-1.5 text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors"
+                            title="刪除"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
