@@ -21,13 +21,39 @@ interface Task {
   is_verified: boolean;
 }
 
+interface RewardTask {
+  text: string;
+  completed: boolean;
+  completion_date?: string | null;
+  // Read older records written by the first date-tracking version.
+  completion_dates?: string[];
+}
+
 interface Reward {
   id: string;
-  task_list: string[];
+  task_list: Array<string | RewardTask>;
   reward_text: string;
   is_achieved: boolean;
   is_verified: boolean;
   created_at?: string;
+}
+
+function normalizeRewardTasks(taskList: Reward['task_list']): RewardTask[] {
+  if (!Array.isArray(taskList)) return [];
+
+  return taskList.map(task => {
+    if (typeof task === 'string') {
+      return { text: task, completed: false, completion_date: null };
+    }
+
+    return {
+      text: task.text,
+      completed: task.completed === true,
+      completion_date: task.completed === true
+        ? task.completion_date || task.completion_dates?.[task.completion_dates.length - 1] || null
+        : null,
+    };
+  });
 }
 
 // =============== MODAL COMPONENT ===============
@@ -142,6 +168,86 @@ function PasswordModal({
   );
 }
 
+function RewardTaskDateModal({
+  date,
+  error,
+  onDateChange,
+  onClose,
+  onSubmit,
+}: {
+  date: string;
+  error: string | null;
+  onDateChange: (date: string) => void;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reward-task-date-title"
+        className="w-full max-w-sm rounded-[32px] bg-white p-6 shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="float-right rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          aria-label="關閉"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <div className="mb-5 pr-8">
+          <h2 id="reward-task-date-title" className="text-xl font-black text-slate-800">輸入完成日期</h2>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">
+            請先選擇日期。同一張獎勵卡內，日期不可重複。
+          </p>
+        </div>
+
+        <form onSubmit={onSubmit}>
+          <label htmlFor="reward-task-completion-date" className="mb-2 block text-sm font-bold text-slate-700">
+            完成日期
+          </label>
+          <input
+            id="reward-task-completion-date"
+            type="date"
+            value={date}
+            onChange={event => onDateChange(event.target.value)}
+            required
+            autoFocus
+            className={cn(
+              "w-full rounded-2xl border-2 bg-slate-50 px-4 py-3 text-base font-bold text-slate-800 outline-none transition-colors",
+              error ? "border-red-400 focus:border-red-500" : "border-slate-200 focus:border-emerald-400"
+            )}
+          />
+          {error && <p role="alert" className="mt-2 text-sm font-bold text-red-600">{error}</p>}
+
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-full bg-slate-100 px-4 py-3 font-bold text-slate-600 transition-colors hover:bg-slate-200"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={!date}
+              className="flex-1 rounded-full bg-emerald-500 px-4 py-3 font-black text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              確認剔選
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 // =============== MAIN APP ===============
 export default function App() {
   const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
@@ -158,6 +264,9 @@ export default function App() {
   const [taskCount, setTaskCount] = useState<number>(1);
   const [taskInputs, setTaskInputs] = useState<string[]>(['']);
   const [isRewardModalOpen, setIsRewardModalOpen] = useState(false);
+  const [rewardTaskDateTarget, setRewardTaskDateTarget] = useState<{ rewardId: string; taskIndex: number } | null>(null);
+  const [rewardTaskDate, setRewardTaskDate] = useState('');
+  const [rewardTaskDateError, setRewardTaskDateError] = useState<string | null>(null);
 
   // Rewards input state removed/re-purposed
   const [newGoalText, setNewGoalText] = useState('');
@@ -392,7 +501,7 @@ export default function App() {
     if (tasks.length === 0 || !newRewardText.trim()) return;
 
     const rewardData = {
-      task_list: tasks.map(text => ({ text, completed: false })),
+      task_list: tasks.map(text => ({ text, completed: false, completion_date: null })),
       reward_text: newRewardText.trim(),
       is_achieved: false,
       is_verified: false
@@ -414,38 +523,89 @@ export default function App() {
     }
   };
 
-  const toggleTaskCompleted = async (rewardId: string, taskIndex: number) => {
-    // Find the reward
-    const reward = rewards.find(r => r.id === rewardId);
-    if (!reward) return;
+  const saveRewardTaskList = async (rewardId: string, taskList: RewardTask[]) => {
+    const isAllCompleted = taskList.length > 0 && taskList.every(task => task.completed);
+    setRewards(prev => prev.map(reward => reward.id === rewardId
+      ? { ...reward, task_list: taskList, is_achieved: isAllCompleted }
+      : reward
+    ));
 
-    // Build the new task list
-    const newTaskList = Array.isArray(reward.task_list) 
-      ? [...reward.task_list.map((t: any) => typeof t === 'string' ? { text: t, completed: false } : t)] 
-      : [];
-    
-    // Toggle the selected task
-    if (newTaskList[taskIndex]) {
-      newTaskList[taskIndex] = { ...newTaskList[taskIndex], completed: !newTaskList[taskIndex].completed };
-    }
-
-    // Check if achieved
-    const isAllCompleted = newTaskList.length > 0 && newTaskList.every((t: any) => t.completed);
-
-    // Optimistically update UI
-    setRewards(prev => prev.map(r => r.id === rewardId ? { ...r, task_list: newTaskList, is_achieved: isAllCompleted } : r));
-
-    // Update Supabase
     const { error } = await supabase
       .from('rewards')
-      .update({ task_list: newTaskList, is_achieved: isAllCompleted })
+      .update({ task_list: taskList, is_achieved: isAllCompleted })
       .eq('id', rewardId);
-      
+
     if (error) {
       console.error('Error updating reward tasks:', error);
-      // Revert if error
+      setStatusMessage(`更新獎勵進度失敗：${error.message}`);
       fetchData();
+    } else {
+      setStatusMessage(null);
     }
+  };
+
+  const closeRewardTaskDateModal = () => {
+    setRewardTaskDateTarget(null);
+    setRewardTaskDate('');
+    setRewardTaskDateError(null);
+  };
+
+  const toggleTaskCompleted = (rewardId: string, taskIndex: number) => {
+    const reward = rewards.find(item => item.id === rewardId);
+    if (!reward) return;
+
+    const taskList = normalizeRewardTasks(reward.task_list);
+    const task = taskList[taskIndex];
+    if (!task) return;
+
+    if (!task.completed) {
+      setRewardTaskDate('');
+      setRewardTaskDateError(null);
+      setRewardTaskDateTarget({ rewardId, taskIndex });
+      return;
+    }
+
+    // Unchecking also clears the date, so it can be used again after the correction.
+    taskList[taskIndex] = { ...task, completed: false, completion_date: null };
+    void saveRewardTaskList(rewardId, taskList);
+  };
+
+  const confirmRewardTaskDate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!rewardTaskDate || !rewardTaskDateTarget) return;
+
+    const { rewardId, taskIndex } = rewardTaskDateTarget;
+    const reward = rewards.find(item => item.id === rewardId);
+    if (!reward) {
+      closeRewardTaskDateModal();
+      return;
+    }
+
+    const taskList = normalizeRewardTasks(reward.task_list);
+    const task = taskList[taskIndex];
+    if (!task || task.completed) {
+      closeRewardTaskDateModal();
+      return;
+    }
+
+    const usedDates = new Set(
+      taskList
+        .filter(item => item.completed && item.completion_date)
+        .map(item => item.completion_date as string)
+    );
+    if (usedDates.has(rewardTaskDate)) {
+      setRewardTaskDateError('每一個獎勵只可以輸入一個日期。');
+      return;
+    }
+
+    taskList[taskIndex] = {
+      ...task,
+      completed: true,
+      completion_date: rewardTaskDate,
+    };
+
+    closeRewardTaskDateModal();
+    await saveRewardTaskList(rewardId, taskList);
   };
 
   const toggleRewardAchieved = async (rewardId: string) => {
@@ -777,12 +937,23 @@ export default function App() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col gap-1.5 mb-2 opacity-75">
-                            {reward.task_list.map((task: any, i: number) => (
+                            {normalizeRewardTasks(reward.task_list).map((task, i) => (
                               <div key={i} className="flex items-start gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
                                 <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
                                   {task.completed && <Check className="w-3 h-3 text-white" />}
                                 </div>
-                                <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>{task.text}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-baseline gap-x-2">
+                                    <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>
+                                      {task.text}
+                                    </p>
+                                    {task.completed && task.completion_date && (
+                                      <span className="whitespace-nowrap text-[10px] font-black text-red-600">
+                                        完成日期：{task.completion_date}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -849,6 +1020,22 @@ export default function App() {
             actionType={modalAction.type}
             onClose={() => setModalAction(null)}
             onSuccess={confirmModalAction}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Reward task completion date modal */}
+      <AnimatePresence>
+        {rewardTaskDateTarget && (
+          <RewardTaskDateModal
+            date={rewardTaskDate}
+            error={rewardTaskDateError}
+            onDateChange={date => {
+              setRewardTaskDate(date);
+              setRewardTaskDateError(null);
+            }}
+            onClose={closeRewardTaskDateModal}
+            onSubmit={confirmRewardTaskDate}
           />
         )}
       </AnimatePresence>
