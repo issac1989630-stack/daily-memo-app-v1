@@ -24,6 +24,8 @@ interface Task {
 interface RewardTask {
   text: string;
   completed: boolean;
+  completion_date?: string | null;
+  // Read older records written by the first date-tracking version.
   completion_dates?: string[];
 }
 
@@ -41,12 +43,15 @@ function normalizeRewardTasks(taskList: Reward['task_list']): RewardTask[] {
 
   return taskList.map(task => {
     if (typeof task === 'string') {
-      return { text: task, completed: false, completion_dates: [] };
+      return { text: task, completed: false, completion_date: null };
     }
 
     return {
-      ...task,
-      completion_dates: Array.isArray(task.completion_dates) ? task.completion_dates : [],
+      text: task.text,
+      completed: task.completed === true,
+      completion_date: task.completed === true
+        ? task.completion_date || task.completion_dates?.[task.completion_dates.length - 1] || null
+        : null,
     };
   });
 }
@@ -199,7 +204,7 @@ function RewardTaskDateModal({
         <div className="mb-5 pr-8">
           <h2 id="reward-task-date-title" className="text-xl font-black text-slate-800">輸入完成日期</h2>
           <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">
-            請先選擇日期。每張獎勵卡的同一日期只可記錄一次。
+            請先選擇日期。同一張獎勵卡內，日期不可重複。
           </p>
         </div>
 
@@ -496,7 +501,7 @@ export default function App() {
     if (tasks.length === 0 || !newRewardText.trim()) return;
 
     const rewardData = {
-      task_list: tasks.map(text => ({ text, completed: false, completion_dates: [] })),
+      task_list: tasks.map(text => ({ text, completed: false, completion_date: null })),
       reward_text: newRewardText.trim(),
       is_achieved: false,
       is_verified: false
@@ -560,8 +565,8 @@ export default function App() {
       return;
     }
 
-    // Keep the recorded dates when unchecked so a date cannot be reused on this card.
-    taskList[taskIndex] = { ...task, completed: false };
+    // Unchecking also clears the date, so it can be used again after the correction.
+    taskList[taskIndex] = { ...task, completed: false, completion_date: null };
     void saveRewardTaskList(rewardId, taskList);
   };
 
@@ -583,16 +588,20 @@ export default function App() {
       return;
     }
 
-    const usedDates = new Set(taskList.flatMap(item => item.completion_dates ?? []));
+    const usedDates = new Set(
+      taskList
+        .filter(item => item.completed && item.completion_date)
+        .map(item => item.completion_date as string)
+    );
     if (usedDates.has(rewardTaskDate)) {
-      setRewardTaskDateError('這個日期已在此獎勵卡記錄，請選擇另一個日期。');
+      setRewardTaskDateError('每一個獎勵只可以輸入一個日期。');
       return;
     }
 
     taskList[taskIndex] = {
       ...task,
       completed: true,
-      completion_dates: [...(task.completion_dates ?? []), rewardTaskDate],
+      completion_date: rewardTaskDate,
     };
 
     closeRewardTaskDateModal();
@@ -934,14 +943,16 @@ export default function App() {
                                   {task.completed && <Check className="w-3 h-3 text-white" />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>
-                                    {task.text}
-                                  </p>
-                                  {(task.completion_dates?.length ?? 0) > 0 && (
-                                    <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
-                                      已記錄日期：{task.completion_dates?.join('、')}
+                                  <div className="flex flex-wrap items-baseline gap-x-2">
+                                    <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>
+                                      {task.text}
                                     </p>
-                                  )}
+                                    {task.completed && task.completion_date && (
+                                      <span className="whitespace-nowrap text-[10px] font-black text-red-600">
+                                        完成日期：{task.completion_date}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))}
