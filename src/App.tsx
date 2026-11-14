@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from './lib/supabase';
+import ShoppingLists from './ShoppingLists';
 
 // =============== UTILS ===============
 function cn(...inputs: ClassValue[]) {
@@ -251,6 +252,7 @@ function RewardTaskDateModal({
 // =============== MAIN APP ===============
 export default function App() {
   const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
+  const [dailyView, setDailyView] = useState<'TASKS' | 'SHOPPING'>('TASKS');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -677,6 +679,11 @@ export default function App() {
 
         {activeTab === 'TASKS' ? (
           <>
+          <div className="flex flex-wrap gap-2 px-4 sm:px-0" role="group" aria-label="每日事項種類">
+            <button type="button" aria-pressed={dailyView === 'TASKS'} onClick={() => setDailyView('TASKS')} className={cn("px-5 py-3 rounded-full font-bold", dailyView === 'TASKS' ? "bg-emerald-600 text-white" : "bg-white text-emerald-800")}>一般事項</button>
+            <button type="button" aria-pressed={dailyView === 'SHOPPING'} onClick={() => { setIsBatchMode(false); setDailyView('SHOPPING'); }} className={cn("px-5 py-3 rounded-full font-bold", dailyView === 'SHOPPING' ? "bg-emerald-600 text-white" : "bg-white text-emerald-800")}>購物清單</button>
+          </div>
+          {dailyView === 'SHOPPING' ? <ShoppingLists selectedDate={selectedDate} onDateChange={setSelectedDate} /> : <>
           <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0">
             
             {currentTasks.length > 0 && (
@@ -883,6 +890,7 @@ export default function App() {
               </button>
            </motion.div>
         )}
+        </>}
         </>
         ) : (
           <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0 mt-4">
