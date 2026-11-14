@@ -8,6 +8,7 @@ interface ShoppingList {
 }
 interface Draft { id: string | null; location: string; date: string; items: ShoppingItem[]; version: string | null; requestId: string }
 const newItem = (): ShoppingItem => ({ id: crypto.randomUUID(), text: '', is_completed: false });
+const accessStorageKey = 'memo.shopping.read-access.v1';
 const inputStyle = 'w-full min-w-0 rounded-xl border-2 border-emerald-100 bg-white p-3 text-base text-slate-800 outline-none focus:border-emerald-400';
 
 function errorText(message: string) {
@@ -20,10 +21,7 @@ function errorText(message: string) {
 export default function ShoppingLists({ selectedDate, onDateChange }: { selectedDate: string; onDateChange: (date: string) => void }) {
   const [lists, setLists] = useState<ShoppingList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unlocked, setUnlocked] = useState(false);
-  const [unlockPin, setUnlockPin] = useState('');
-  const [unlocking, setUnlocking] = useState(false);
-  const sessionPin = useRef('');
+  const accessToken = useRef('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmation, setConfirmation] = useState<'SAVE' | ShoppingList | null>(null);
@@ -34,14 +32,15 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
   const pending = useRef(new Set<string>());
 
   const reload = useCallback(async () => {
-    if (!sessionPin.current) return;
-    const { data, error: readError } = await supabase.rpc('memo_get_shopping_lists', { p_pin: sessionPin.current });
+    if (!accessToken.current) { setLoading(false); return; }
+    const { data, error: readError } = await supabase.rpc('memo_get_shopping_lists_with_access', { p_access_token: accessToken.current });
     if (readError) setError('未能讀取購物清單，請稍後重試。');
     else { setLists((data || []) as ShoppingList[]); setError(''); }
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    try { accessToken.current = localStorage.getItem(accessStorageKey) || ''; } catch { /* This browser may disable local storage. */ }
     void reload();
     const refresh = () => { if (document.visibilityState === 'visible') void reload(); };
     window.addEventListener('focus', refresh);
@@ -70,13 +69,16 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
     setSaving(true); setPinError('');
     try {
       if (confirmation === 'SAVE' && draft) {
-        const { data, error: saveError } = await supabase.rpc('memo_save_shopping_list', {
+        const { data, error: saveError } = await supabase.rpc('memo_save_shopping_list_with_access', {
           p_id: draft.id || draft.requestId, p_location: draft.location.trim(), p_date: draft.date,
           p_items: draft.items.map(item => ({ ...item, text: item.text.trim() })), p_pin: pin,
-          p_expected_updated_at: draft.version,
+          p_expected_updated_at: draft.version, p_access_token: accessToken.current || null,
         });
         if (saveError) { setPinError(errorText(saveError.message)); return; }
-        const result = data as ShoppingList;
+        const saved = data as { list: ShoppingList; access_token: string };
+        accessToken.current = saved.access_token;
+        try { localStorage.setItem(accessStorageKey, saved.access_token); } catch { /* Keep access in memory for this visit. */ }
+        const result = saved.list;
         setLists(previous => [...previous.filter(list => list.id !== result.id), result]);
         onDateChange(result.shopping_date); setDraft(null);
       } else if (confirmation !== 'SAVE') {
@@ -95,8 +97,8 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
     if (pending.current.has(list.id)) return;
     pending.current.add(list.id); setBusyIds([...pending.current]); setError('');
     try {
-      const { data, error: updateError } = await supabase.rpc('memo_set_shopping_item', {
-        p_id: list.id, p_item_id: item.id, p_completed: !item.is_completed, p_pin: sessionPin.current,
+      const { data, error: updateError } = await supabase.rpc('memo_set_shopping_item_with_access', {
+        p_id: list.id, p_item_id: item.id, p_completed: !item.is_completed, p_access_token: accessToken.current,
       });
       if (updateError) setError('未能更新打剔狀態，請再試一次。');
       else setLists(previous => previous.map(row => row.id === list.id ? data as ShoppingList : row));
@@ -104,25 +106,6 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
     finally { pending.current.delete(list.id); setBusyIds([...pending.current]); }
   }
 
-  if (!unlocked) return (
-    <section className="mx-4 sm:mx-auto max-w-md rounded-3xl border border-emerald-100 bg-white p-6" aria-label="解鎖購物清單">
-      <h2 className="text-xl font-black text-emerald-900">開啟購物清單</h2>
-      <p className="mt-3 text-slate-600">請家長／老師輸入密碼。開啟後，學生便可以逐件打剔。</p>
-      <form onSubmit={async event => {
-        event.preventDefault(); if (unlocking) return; setUnlocking(true); setError('');
-        try {
-          const { data, error: unlockError } = await supabase.rpc('memo_get_shopping_lists', { p_pin: unlockPin });
-          if (unlockError) { setError(errorText(unlockError.message)); return; }
-          sessionPin.current = unlockPin; setLists((data || []) as ShoppingList[]); setUnlocked(true); setLoading(false);
-        } catch { setError('未能連線，請再試一次。'); }
-        finally { setUnlockPin(''); setUnlocking(false); }
-      }}>
-        <label className="block mt-5 font-bold text-slate-700">家長／老師密碼<input aria-label="開啟購物清單的密碼" type="password" inputMode="numeric" autoComplete="off" maxLength={4} required disabled={unlocking} value={unlockPin} onChange={event => setUnlockPin(event.target.value)} className={inputStyle + ' mt-2'} /></label>
-        {error && <p role="alert" className="mt-3 font-bold text-red-600">{error}</p>}
-        <button type="submit" disabled={unlocking || unlockPin.length !== 4} className="mt-5 rounded-full bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-40">{unlocking ? '正在開啟…' : '開啟清單'}</button>
-      </form>
-    </section>
-  );
 
   return (
     <section className="px-4 sm:px-0 pb-12" aria-label="購物清單">
