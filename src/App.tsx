@@ -39,6 +39,15 @@ interface Reward {
   created_at?: string;
 }
 
+interface TrashEntry {
+  kind: 'task' | 'reward' | 'shopping';
+  id: string;
+  label: string;
+  date: string | null;
+  deleted_at: string;
+  created_at?: string;
+}
+
 function normalizeRewardTasks(taskList: Reward['task_list']): RewardTask[] {
   if (!Array.isArray(taskList)) return [];
 
@@ -282,6 +291,12 @@ export default function App() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTaskText, setEditTaskText] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashUnlocked, setTrashUnlocked] = useState(false);
+  const [trashPin, setTrashPin] = useState('');
+  const [trashError, setTrashError] = useState('');
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
 
   // Fetch from Supabase
   const fetchData = async () => {
@@ -289,6 +304,7 @@ export default function App() {
     const { data: tasksData, error: tasksError } = await supabase
       .from('tasks')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: true });
     
     if (tasksError) {
@@ -302,6 +318,7 @@ export default function App() {
     const { data: rewardsData, error: rewardsError } = await supabase
       .from('rewards')
       .select('*')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     
     if (rewardsError) {
@@ -443,18 +460,19 @@ export default function App() {
   };
   
     const deleteTask = async (taskId: string) => {
-      // Optimistic update
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-      
       const { error } = await supabase
         .from('tasks')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', taskId);
-        
+
       if (error) {
-        console.error('Error deleting task:', error);
-        fetchData();
+        console.error('Error moving task to trash:', error);
+        setStatusMessage('未能移至垃圾桶，資料仍保留，請重試。');
+        return;
       }
+
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+      setStatusMessage(null);
     };
   
     const startEditing = (task: Task) => {
@@ -622,13 +640,83 @@ export default function App() {
   };
 
   const deleteReward = async (rewardId: string) => {
-    setRewards(prev => prev.filter(r => r.id !== rewardId));
-    const { error } = await supabase.from('rewards').delete().eq('id', rewardId);
-    if (error) fetchData();
+    const { error } = await supabase.from('rewards')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', rewardId);
+
+    if (error) {
+      console.error('Error moving reward to trash:', error);
+      setStatusMessage('未能移至垃圾桶，資料仍保留，請重試。');
+      return;
+    }
+
+    setRewards(prev => prev.filter(reward => reward.id !== rewardId));
+    setStatusMessage(null);
   };
 
   const handleVerifyRewardClick = (rewardId: string) => {
     setModalAction({ type: 'VERIFY', ids: [rewardId], context: 'REWARDS' });
+  };
+
+  const openTrash = () => {
+    setTrashOpen(true);
+    setTrashUnlocked(false);
+    setTrashPin('');
+    setTrashError('');
+    setTrashEntries([]);
+  };
+
+  const unlockTrash = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (trashLoading) return;
+    setTrashLoading(true);
+    setTrashError('');
+    try {
+      const { data, error } = await supabase.rpc('memo_get_trash', { p_pin: trashPin });
+      if (error) {
+        setTrashError(error.message.includes('PIN_INCORRECT') ? '密碼不正確，請重新輸入。' : '未能開啟垃圾桶，請先完成資料庫更新後重試。');
+        return;
+      }
+      setTrashEntries((data || []) as TrashEntry[]);
+      setTrashUnlocked(true);
+    } catch {
+      setTrashError('連線中斷，未能開啟垃圾桶，請重試。');
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  const restoreTrashEntry = async (entry: TrashEntry) => {
+    if (trashLoading) return;
+    setTrashLoading(true);
+    setTrashError('');
+    try {
+      const { error } = await supabase.rpc('memo_restore_from_trash', {
+        p_kind: entry.kind,
+        p_id: entry.id,
+        p_pin: trashPin,
+      });
+      if (error) {
+        setTrashError(error.message.includes('PIN_INCORRECT') ? '密碼不正確，請重新開啟垃圾桶。' : '未能復原資料，請重新整理後重試。');
+        return;
+      }
+
+      if (entry.kind === 'reward') {
+        setActiveTab('REWARDS');
+      } else {
+        setActiveTab('TASKS');
+        setDailyView(entry.kind === 'shopping' ? 'SHOPPING' : 'TASKS');
+        if (entry.date) setSelectedDate(entry.date);
+      }
+      setTrashEntries(previous => previous.filter(item => !(item.kind === entry.kind && item.id === entry.id)));
+      setTrashOpen(false);
+      setTrashUnlocked(false);
+      await fetchData();
+    } catch {
+      setTrashError('連線中斷，未能復原資料，請重試。');
+    } finally {
+      setTrashLoading(false);
+    }
   };
 
   return (
@@ -672,6 +760,14 @@ export default function App() {
                 className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'REWARDS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
               >
                 <Star className="w-4 h-4" /> 獎勵計劃
+              </button>
+              <button
+                type="button"
+                onClick={openTrash}
+                className="px-4 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 text-slate-600 hover:bg-white shadow-sm"
+                aria-label="開啟垃圾桶"
+              >
+                <Trash2 className="w-4 h-4" /> 垃圾桶
               </button>
             </div>
           </div>
@@ -1118,6 +1214,45 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      {trashOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="trash-title" className="w-full max-w-lg max-h-[85vh] overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <h2 id="trash-title" className="flex items-center gap-2 text-xl font-black text-slate-800"><Trash2 className="h-5 w-5" />垃圾桶</h2>
+              <button type="button" onClick={() => { setTrashOpen(false); setTrashPin(''); setTrashError(''); }} className="rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="關閉"><X className="h-5 w-5" /></button>
+            </div>
+            {!trashUnlocked ? (
+              <form onSubmit={unlockTrash} className="p-6">
+                <p className="text-sm font-medium text-slate-600">請輸入密碼以查看及復原已刪除的資料。</p>
+                <label className="mt-4 block text-sm font-bold text-slate-700">密碼
+                  <input type="password" inputMode="numeric" autoComplete="off" maxLength={4} required autoFocus value={trashPin} onChange={event => { setTrashPin(event.target.value); setTrashError(''); }} className="mt-2 w-full rounded-xl border-2 border-slate-200 p-3 text-center text-xl tracking-[0.5em] outline-none focus:border-emerald-400" />
+                </label>
+                {trashError && <p role="alert" className="mt-3 text-sm font-bold text-red-600">{trashError}</p>}
+                <button type="submit" disabled={trashLoading || trashPin.length !== 4} className="mt-5 w-full rounded-full bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-50">{trashLoading ? '正在驗證…' : '確認密碼'}</button>
+              </form>
+            ) : (
+              <div className="max-h-[calc(85vh-72px)] overflow-y-auto p-5">
+                {trashError && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{trashError}</p>}
+                {trashEntries.length === 0 ? <p className="rounded-2xl bg-slate-50 p-8 text-center font-bold text-slate-500">垃圾桶暫時沒有資料</p> : (
+                  <ul className="space-y-3">
+                    {trashEntries.map(entry => (
+                      <li key={entry.kind + ':' + entry.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 p-4">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800">{entry.label}</p>
+                          <p className="mt-1 text-xs font-medium text-slate-500">{entry.kind === 'task' ? '每日事項' : entry.kind === 'reward' ? '獎勵計劃' : '購物清單'}{entry.date ? ' · ' + entry.date : ''}</p>
+                        </div>
+                        <button type="button" disabled={trashLoading} onClick={() => { void restoreTrashEntry(entry); }} className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700 disabled:opacity-50">
+                          <RotateCcw className="h-4 w-4" />復原
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
