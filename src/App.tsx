@@ -764,10 +764,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={openTrash}
-                className="px-4 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 text-slate-600 hover:bg-white shadow-sm"
+                className="rounded-full p-2 text-slate-300 transition-colors hover:bg-white/70 hover:text-slate-600"
                 aria-label="開啟垃圾桶"
+                title="垃圾桶"
               >
-                <Trash2 className="w-4 h-4" /> 垃圾桶
+                <Trash2 className="h-4 w-4" />
               </button>
             </div>
           </div>
