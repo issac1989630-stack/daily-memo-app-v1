@@ -33,3 +33,8 @@ hash is stored in the private database schema; the browser stores the opaque
 capability rather than the parent PIN. This capability cannot authorize content
 edits or deletion. A new browser has no saved access until a parent confirms a
 save there. Direct table access remains disabled.
+
+
+## Trash and restore
+
+Apply `trash-schema.sql` after `shopping-lists-schema.sql` and `shopping-lists-save-confirmation.sql` in the Supabase SQL editor. This migration adds reversible deletion for daily tasks, reward plans, and shopping lists. Deleted entries stay in the database, are hidden from the active lists, and appear in the trash after the parent PIN (`2026`) is verified. Restoring an entry returns it to its original section and date.
