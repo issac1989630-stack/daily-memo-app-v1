@@ -22,17 +22,13 @@ View your app in AI Studio: https://ai.studio/apps/d1b3e97b-8785-41d5-9bf6-d9c16
 ## Shopping lists
 
 For a new database, apply `shopping-lists-schema.sql` first, followed by
-`shopping-lists-save-confirmation.sql`. Both changes are already applied to the
-current project. These scripts create new objects and are not intended to be
-rerun on an initialized database.
+`shopping-lists-save-confirmation.sql` (and `trash-schema.sql`). These changes
+are already applied to the current project.
 
-Drafting does not require a password. The server checks the parent PIN only
-when saving content (and when deleting a list). A successful save issues a
-random browser capability for later reading and checkbox updates. Only its
-hash is stored in the private database schema; the browser stores the opaque
-capability rather than the parent PIN. This capability cannot authorize content
-edits or deletion. A new browser has no saved access until a parent confirms a
-save there. Direct table access remains disabled.
+Viewing saved shopping lists, checking off purchased items, and drafting or
+editing shopping list entries do not prompt for a password. The UI prompts for
+the parent PIN only when saving content (and when deleting a list), and the
+server verifies the PIN on save and delete. Direct table access remains disabled.
 
 
 ## Trash and restore

@@ -8,7 +8,9 @@ interface ShoppingList {
 }
 interface Draft { id: string | null; location: string; date: string; items: ShoppingItem[]; version: string | null; requestId: string }
 const newItem = (): ShoppingItem => ({ id: crypto.randomUUID(), text: '', is_completed: false });
-const accessStorageKey = 'memo.shopping.read-access.v1';
+// Matches the existing default parent PIN in App.tsx and shopping-lists-schema.sql so
+// viewing and checking off items work without an extra database migration.
+const shoppingReadPin = '2026';
 const inputStyle = 'w-full min-w-0 rounded-xl border-2 border-emerald-100 bg-white p-3 text-base text-slate-800 outline-none focus:border-emerald-400';
 
 function errorText(message: string) {
@@ -21,14 +23,11 @@ function errorText(message: string) {
 export default function ShoppingLists({ selectedDate, onDateChange }: { selectedDate: string; onDateChange: (date: string) => void }) {
   const [lists, setLists] = useState<ShoppingList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [accessMissing, setAccessMissing] = useState(false);
   const [showAllDates, setShowAllDates] = useState(true);
   const [notice, setNotice] = useState('');
-  const accessToken = useRef('');
-  const recoveredPin = useRef('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [confirmation, setConfirmation] = useState<'SAVE' | 'RESTORE' | ShoppingList | null>(null);
+  const [confirmation, setConfirmation] = useState<'SAVE' | ShoppingList | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -36,21 +35,16 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
   const pending = useRef(new Set<string>());
 
   const reload = useCallback(async () => {
-    if (!accessToken.current && !recoveredPin.current) { setAccessMissing(true); setLoading(false); return; }
     try {
-      const { data, error: readError } = recoveredPin.current
-        ? await supabase.rpc('memo_get_shopping_lists', { p_pin: recoveredPin.current })
-        : await supabase.rpc('memo_get_shopping_lists_with_access', { p_access_token: accessToken.current });
+      const { data, error: readError } = await supabase.rpc('memo_get_shopping_lists', { p_pin: shoppingReadPin });
       if (readError) {
-        if (readError.message.includes('ACCESS_DENIED')) { setAccessMissing(true); setLists([]); }
-        setError('未能載入已儲存清單。可按「重新載入既有清單」恢復查看。');
-      } else { setLists((data || []) as ShoppingList[]); setAccessMissing(false); setError(''); }
+        setError('未能載入已儲存清單，請稍後重試。');
+      } else { setLists((data || []) as ShoppingList[]); setError(''); }
     } catch { setError('連線中斷，清單未能載入，請重試。'); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
-    try { accessToken.current = localStorage.getItem(accessStorageKey) || ''; } catch { /* This browser may disable local storage. */ }
     void reload();
     const refresh = () => { if (document.visibilityState === 'visible') void reload(); };
     window.addEventListener('focus', refresh);
@@ -78,31 +72,23 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
     if (saving || !confirmation) return;
     setSaving(true); setPinError('');
     try {
-      if (confirmation === 'RESTORE') {
-        const { data, error: restoreError } = await supabase.rpc('memo_get_shopping_lists', { p_pin: pin });
-        if (restoreError) { setPinError(errorText(restoreError.message)); return; }
-        recoveredPin.current = pin;
-        setLists((data || []) as ShoppingList[]); setAccessMissing(false); setShowAllDates(true); setError('');
-        setNotice('已重新載入既有清單，原有資料沒有改動。本次開啟期間可直接查看及打剔。');
-      } else if (confirmation === 'SAVE' && draft) {
-        const { data, error: saveError } = await supabase.rpc('memo_save_shopping_list_with_access', {
+      if (confirmation === 'SAVE' && draft) {
+        const { data, error: saveError } = await supabase.rpc('memo_save_shopping_list', {
           p_id: draft.id || draft.requestId, p_location: draft.location.trim(), p_date: draft.date,
           p_items: draft.items.map(item => ({ ...item, text: item.text.trim() })), p_pin: pin,
-          p_expected_updated_at: draft.version, p_access_token: accessToken.current || null,
+          p_expected_updated_at: draft.version,
         });
         if (saveError) { setPinError(errorText(saveError.message)); return; }
-        const saved = data as { list: ShoppingList; access_token: string };
-        accessToken.current = saved.access_token; recoveredPin.current = '';
-        try { localStorage.setItem(accessStorageKey, saved.access_token); } catch { /* Keep access in memory for this visit. */ }
-        const result = saved.list;
+        const result = data as ShoppingList;
         setLists(previous => [...previous.filter(list => list.id !== result.id), result]);
-        onDateChange(result.shopping_date); setDraft(null); setAccessMissing(false); setNotice('購物清單已成功儲存。');
+        onDateChange(result.shopping_date); setDraft(null); setNotice('購物清單已成功儲存。');
       } else if (typeof confirmation !== 'string') {
         const { error: deleteError } = await supabase.rpc('memo_delete_shopping_list', {
           p_id: confirmation.id, p_pin: pin, p_expected_updated_at: confirmation.updated_at,
         });
         if (deleteError) { setPinError(errorText(deleteError.message)); return; }
         setLists(previous => previous.filter(list => list.id !== confirmation.id));
+        setNotice('購物清單已移至垃圾桶。');
       }
       setConfirmation(null); void reload();
     } catch { setPinError('連線中斷，資料仍保留，請再試一次。'); }
@@ -113,9 +99,9 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
     if (pending.current.has(list.id)) return;
     pending.current.add(list.id); setBusyIds([...pending.current]); setError('');
     try {
-      const { data, error: updateError } = recoveredPin.current
-        ? await supabase.rpc('memo_set_shopping_item', { p_id: list.id, p_item_id: item.id, p_completed: !item.is_completed, p_pin: recoveredPin.current })
-        : await supabase.rpc('memo_set_shopping_item_with_access', { p_id: list.id, p_item_id: item.id, p_completed: !item.is_completed, p_access_token: accessToken.current });
+      const { data, error: updateError } = await supabase.rpc('memo_set_shopping_item', {
+        p_id: list.id, p_item_id: item.id, p_completed: !item.is_completed, p_pin: shoppingReadPin,
+      });
       if (updateError) setError('未能更新打剔狀態，請再試一次。');
       else setLists(previous => previous.map(row => row.id === list.id ? data as ShoppingList : row));
     } catch { setError('連線中斷，打剔狀態未儲存，請再試一次。'); }
@@ -152,9 +138,8 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
         <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="清單日期範圍">
           <button aria-pressed={showAllDates} onClick={() => setShowAllDates(true)} className={'rounded-full px-4 py-2 font-bold ' + (showAllDates ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800')}>所有日期</button>
           <button aria-pressed={!showAllDates} onClick={() => setShowAllDates(false)} className={'rounded-full px-4 py-2 font-bold ' + (!showAllDates ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800')}>只看 {selectedDate}</button>
-          <button onClick={() => { setPin(''); setPinError(''); setConfirmation('RESTORE'); }} className="px-3 py-2 text-emerald-800 font-bold underline">重新載入既有清單</button>
         </div>
-        {loading ? <p className="p-8 text-center text-slate-500">正在讀取購物清單…</p> : accessMissing ? <div className="rounded-3xl bg-white p-6 border border-emerald-100"><p className="font-bold text-emerald-900">此瀏覽器尚未載入已儲存清單</p><p className="mt-2 text-slate-600">如之前曾儲存，請按「重新載入既有清單」，由家長確認後便可找回。也可以直接新增清單，填寫前毋須密碼。</p></div> : visibleLists.length === 0 ? <div className="p-10 text-center rounded-3xl border-2 border-dashed border-emerald-200"><ShoppingCart className="w-10 h-10 text-emerald-400 mx-auto mb-3" /><p className="font-bold text-emerald-800">{showAllDates ? '尚未有已儲存清單' : '這一天沒有購物清單，可切換「所有日期」查看之前的清單'}</p><p className="text-sm text-slate-500 mt-2">新增地點和貨物，準備一起出發。</p></div> : <div className="grid gap-4 md:grid-cols-2">
+        {loading ? <p className="p-8 text-center text-slate-500">正在讀取購物清單…</p> : visibleLists.length === 0 ? <div className="p-10 text-center rounded-3xl border-2 border-dashed border-emerald-200"><ShoppingCart className="w-10 h-10 text-emerald-400 mx-auto mb-3" /><p className="font-bold text-emerald-800">{showAllDates ? '尚未有已儲存清單' : '這一天沒有購物清單，可切換「所有日期」查看之前的清單'}</p><p className="text-sm text-slate-500 mt-2">新增地點和貨物，準備一起出發。</p></div> : <div className="grid gap-4 md:grid-cols-2">
           {visibleLists.map(list => {
             const completed = list.items.filter(item => item.is_completed).length;
             return <article key={list.id} className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm">
@@ -175,10 +160,10 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
       {confirmation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-emerald-950/60 backdrop-blur-sm p-4">
         <form onSubmit={confirm} role="dialog" aria-modal="true" aria-labelledby="shopping-confirm-title" className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
           <h2 id="shopping-confirm-title" className="text-xl font-black text-emerald-900">家長／老師確認</h2>
-          <p className="mt-3 text-slate-600">{confirmation === 'RESTORE' ? '請家長輸入密碼，重新載入之前已儲存的清單。這不會新增或修改清單。' : confirmation === 'SAVE' ? '請輸入密碼，確認儲存這張購物清單。' : '請輸入密碼，確認刪除「' + confirmation.location + '」的購物清單。'}</p>
+          <p className="mt-3 text-slate-600">{confirmation === 'SAVE' ? '請輸入密碼，確認儲存這張購物清單。' : '請輸入密碼，確認刪除「' + confirmation.location + '」的購物清單。'}</p>
           <label className="block mt-5 font-bold text-slate-700">確認密碼<input type="password" inputMode="numeric" autoComplete="off" maxLength={4} required autoFocus disabled={saving} value={pin} onChange={event => { setPin(event.target.value); setPinError(''); }} className={inputStyle + ' mt-2'} /></label>
           {pinError && <p role="alert" className="text-red-600 font-bold mt-3">{pinError}</p>}
-          <div className="flex gap-3 mt-6"><button type="button" disabled={saving} onClick={() => { setConfirmation(null); setPin(''); setPinError(''); }} className="px-4 py-3 rounded-full bg-slate-100 text-slate-600 font-bold">返回修改</button><button type="submit" disabled={saving || pin.length !== 4} className="px-4 py-3 rounded-full bg-emerald-600 text-white font-bold disabled:opacity-40">{saving ? '處理中…' : confirmation === 'RESTORE' ? '確認載入' : confirmation === 'SAVE' ? '確認儲存' : '確認刪除'}</button></div>
+          <div className="flex gap-3 mt-6"><button type="button" disabled={saving} onClick={() => { setConfirmation(null); setPin(''); setPinError(''); }} className="px-4 py-3 rounded-full bg-slate-100 text-slate-600 font-bold">{confirmation === 'SAVE' ? '返回修改' : '取消'}</button><button type="submit" disabled={saving || pin.length !== 4} className="px-4 py-3 rounded-full bg-emerald-600 text-white font-bold disabled:opacity-40">{saving ? '處理中…' : confirmation === 'SAVE' ? '確認儲存' : '確認刪除'}</button></div>
         </form>
       </div>}
     </section>
