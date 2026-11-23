@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { Plus, Check, ShieldCheck, Lock, ChevronDown, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
+import { Plus, Check, ShieldCheck, Lock, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -260,13 +260,13 @@ function RewardTaskDateModal({
 
 // =============== MAIN APP ===============
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS'>('TASKS');
+  const [activeTab, setActiveTab] = useState<'TASKS' | 'REWARDS' | 'COMPLETED_REWARDS'>('TASKS');
   const [dailyView, setDailyView] = useState<'TASKS' | 'SHOPPING'>('TASKS');
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
-  const [showCompletedRewards, setShowCompletedRewards] = useState(false);
+  const completedRewardsHeadingRef = useRef<HTMLHeadingElement>(null);
   const [loading, setLoading] = useState(true);
   
   const [newTaskText, setNewTaskText] = useState('');
@@ -298,6 +298,10 @@ export default function App() {
   const [trashError, setTrashError] = useState('');
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'COMPLETED_REWARDS') completedRewardsHeadingRef.current?.focus();
+  }, [activeTab]);
 
   // Fetch from Supabase
   const fetchData = async () => {
@@ -789,6 +793,11 @@ export default function App() {
 
                       {/* Card Footer Actions */}
                       <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80 mt-1">
+                        {reward.is_achieved && !reward.is_verified && (
+                          <span className="mr-auto flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-800">
+                            <Check aria-hidden="true" className="h-3.5 w-3.5" /> 已完成
+                          </span>
+                        )}
                         {reward.is_verified ? (
                            <button
                              onClick={(e) => { e.stopPropagation(); setModalAction({ type: 'UNVERIFY', ids: [reward.id], context: 'REWARDS'}); }}
@@ -856,7 +865,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => setActiveTab('REWARDS')}
-                className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab === 'REWARDS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
+                className={cn("px-5 py-2.5 rounded-full text-sm font-bold flex items-center gap-2 transition-all", activeTab !== 'TASKS' ? "bg-white text-amber-500 shadow-sm" : "text-slate-400 hover:bg-white/50")}
               >
                 <Star className="w-4 h-4" /> 獎勵計劃
               </button>
@@ -1088,9 +1097,37 @@ export default function App() {
         )}
         </>}
         </>
+        ) : activeTab === 'COMPLETED_REWARDS' ? (
+          <section className="relative z-10 w-full max-w-lg self-center px-4 pb-40" aria-labelledby="completed-rewards-heading">
+            <button
+              type="button"
+              onClick={() => setActiveTab('REWARDS')}
+              className="mb-3 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-bold text-emerald-800 hover:bg-emerald-50"
+            >
+              <ChevronLeft aria-hidden="true" className="h-5 w-5" /> 返回獎勵計劃
+            </button>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950">
+              <h2 ref={completedRewardsHeadingRef} tabIndex={-1} id="completed-rewards-heading" className="flex items-center gap-2 text-xl font-black">
+                <Check aria-hidden="true" className="h-5 w-5 shrink-0" strokeWidth={3} /> 已完成獎勵
+              </h2>
+              {!loading && (
+                <span className="rounded-full bg-white px-3 py-1 text-sm font-bold tabular-nums text-emerald-800">共 {completedRewards.length} 項</span>
+              )}
+            </div>
+            {loading ? (
+              <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600" role="status">正在載入獎勵…</p>
+            ) : completedRewards.length > 0 ? (
+              <div className="space-y-4">
+                <AnimatePresence initial={false}>
+                  {completedRewards.map(renderRewardCard)}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">暫時未有已完成的獎勵</p>
+            )}
+          </section>
         ) : (
           <div className="flex-1 overflow-y-auto pb-40 lg:pr-4 relative z-10 px-4 sm:px-0 mt-4">
-             
             {/* List Rewards Header */}
             <div className="flex justify-between items-center mb-6 px-2">
               <h3 className="text-slate-500 font-bold text-sm tracking-widest uppercase flex items-center gap-2">
@@ -1106,30 +1143,17 @@ export default function App() {
 
             <div className="mx-auto mb-6 max-w-lg">
               <button
-                id="completed-rewards-button"
                 type="button"
-                aria-expanded={showCompletedRewards}
-                aria-controls="completed-rewards-list"
-                onClick={() => setShowCompletedRewards(isOpen => !isOpen)}
-                className="flex min-h-11 w-full items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-left text-sm font-bold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                onClick={() => setActiveTab('COMPLETED_REWARDS')}
+                className="flex min-h-11 w-full items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-left text-sm font-bold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
               >
                 <Check aria-hidden="true" className="h-5 w-5 shrink-0" strokeWidth={3} />
                 <span>已完成獎勵</span>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs tabular-nums">{completedRewards.length}</span>
-                <ChevronDown aria-hidden="true" className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", showCompletedRewards && "rotate-180")} />
-              </button>
-
-              <section id="completed-rewards-list" aria-labelledby="completed-rewards-button" hidden={!showCompletedRewards} className="mt-4 space-y-4">
-                {showCompletedRewards && (
-                  completedRewards.length > 0 ? (
-                    <AnimatePresence initial={false}>
-                      {completedRewards.map(renderRewardCard)}
-                    </AnimatePresence>
-                  ) : (
-                    <p className="rounded-2xl bg-white/70 px-4 py-3 text-sm text-slate-600">暫時未有已完成的獎勵</p>
-                  )
+                {!loading && (
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs tabular-nums">{completedRewards.length}</span>
                 )}
-              </section>
+                <ChevronRight aria-hidden="true" className="ml-auto h-4 w-4 shrink-0" />
+              </button>
             </div>
 
             {/* List Rewards */}
