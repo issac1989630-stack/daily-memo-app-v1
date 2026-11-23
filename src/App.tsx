@@ -719,6 +719,104 @@ export default function App() {
     }
   };
 
+  const activeRewards = rewards.filter(reward => !reward.is_achieved);
+  const completedRewards = rewards.filter(reward => reward.is_achieved);
+
+  const renderRewardCard = (reward: Reward) => (
+                    <motion.div
+                      key={reward.id}
+                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                      layout
+                      className={cn(
+                        "bg-white rounded-[24px] p-4 flex flex-col gap-3 shadow-sm border-2 transition-all duration-300 relative overflow-hidden",
+                        reward.is_verified ? "border-amber-400" : reward.is_achieved ? "border-sky-400" : "border-slate-100"
+                      )}
+                    >
+                      {reward.is_verified && (
+                        <div className="absolute top-0 right-0 bg-amber-400 text-amber-950 text-[10px] font-black px-3 py-1 rounded-bl-lg flex items-center gap-1">
+                          <Check className="w-3 h-3 stroke-[3]" /> 已兌現
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        <div
+                          onClick={() => toggleRewardAchieved(reward.id)}
+                          className={cn(
+                            "w-8 h-8 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 transition-colors duration-300",
+                            reward.is_achieved || reward.is_verified
+                              ? "border-emerald-400 bg-emerald-50 cursor-default"
+                              : "border-slate-200 hover:border-sky-400 cursor-pointer"
+                          )}
+                        >
+                          {(reward.is_achieved || reward.is_verified) && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col gap-1.5 mb-2 opacity-75">
+                            {normalizeRewardTasks(reward.task_list).map((task, i) => (
+                              <div key={i} className="flex items-start gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
+                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
+                                  {task.completed && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-baseline gap-x-2">
+                                    <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>
+                                      {task.text}
+                                    </p>
+                                    {task.completed && task.completion_date && (
+                                      <span className="whitespace-nowrap text-[10px] font-black text-red-600">
+                                        完成日期：{task.completion_date}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-start gap-1.5">
+                            <Gift className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <h3 className={cn("text-sm sm:text-base font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-snug transition-all duration-300",
+                              reward.is_verified ? "text-slate-400 decoration-amber-200 decoration-2 line-through" : "text-amber-900"
+                            )}>
+                              {reward.reward_text}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80 mt-1">
+                        {reward.is_verified ? (
+                           <button
+                             onClick={(e) => { e.stopPropagation(); setModalAction({ type: 'UNVERIFY', ids: [reward.id], context: 'REWARDS'}); }}
+                             className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors flex items-center gap-1 text-xs font-bold"
+                             title="取消核可"
+                           >
+                             <RotateCcw className="w-4 h-4" />
+                             <span className="text-[11px]">重設</span>
+                           </button>
+                        ) : reward.is_achieved ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleVerifyRewardClick(reward.id); }}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-full font-bold text-xs transition-all flex items-center gap-1"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" /> 家長核可
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteReward(reward.id); }}
+                            className="p-1.5 text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors"
+                            title="刪除"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+  );
+
   return (
     <div className={cn("min-h-[100dvh] text-slate-800 font-sans sm:p-8 flex justify-center overflow-x-hidden relative transition-colors duration-500", activeTab === 'TASKS' ? "bg-[#F0FDF4]" : "bg-[#FFFBEB]")}>
       <div className="w-full max-w-5xl flex flex-col gap-6 sm:gap-8 h-full min-h-[90vh] z-10 relative">
@@ -1006,111 +1104,32 @@ export default function App() {
             </div>
 
             {/* List Rewards */}
-            {rewards.length > 0 ? (
+            {activeRewards.length > 0 ? (
               <div className="space-y-4 max-w-lg mx-auto">
                 <AnimatePresence initial={false}>
-                  {rewards.map(reward => (
-                    <motion.div
-                      key={reward.id}
-                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                      layout
-                      className={cn(
-                        "bg-white rounded-[24px] p-4 flex flex-col gap-3 shadow-sm border-2 transition-all duration-300 relative overflow-hidden",
-                        reward.is_verified ? "border-amber-400" : reward.is_achieved ? "border-sky-400" : "border-slate-100"
-                      )}
-                    >
-                      {reward.is_verified && (
-                        <div className="absolute top-0 right-0 bg-amber-400 text-amber-950 text-[10px] font-black px-3 py-1 rounded-bl-lg flex items-center gap-1">
-                          <Check className="w-3 h-3 stroke-[3]" /> 已兌現
-                        </div>
-                      )}
-
-                      <div className="flex items-start gap-3 sm:gap-4">
-                        <div
-                          onClick={() => toggleRewardAchieved(reward.id)}
-                          className={cn(
-                            "w-8 h-8 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0 transition-colors duration-300",
-                            reward.is_achieved || reward.is_verified
-                              ? "border-emerald-400 bg-emerald-50 cursor-default"
-                              : "border-slate-200 hover:border-sky-400 cursor-pointer"
-                          )}
-                        >
-                          {(reward.is_achieved || reward.is_verified) && <Check className="w-4 h-4 text-emerald-500" strokeWidth={3} />}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col gap-1.5 mb-2 opacity-75">
-                            {normalizeRewardTasks(reward.task_list).map((task, i) => (
-                              <div key={i} className="flex items-start gap-2 cursor-pointer" onClick={() => toggleTaskCompleted(reward.id, i)}>
-                                <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5", task.completed ? "bg-emerald-400 border-emerald-400" : "border-slate-300")}>
-                                  {task.completed && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-baseline gap-x-2">
-                                    <p className={cn("text-xs font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-relaxed", task.completed ? "text-slate-400 line-through" : "text-slate-600")}>
-                                      {task.text}
-                                    </p>
-                                    {task.completed && task.completion_date && (
-                                      <span className="whitespace-nowrap text-[10px] font-black text-red-600">
-                                        完成日期：{task.completion_date}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex items-start gap-1.5">
-                            <Gift className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                            <h3 className={cn("text-sm sm:text-base font-bold whitespace-normal break-words [overflow-wrap:anywhere] leading-snug transition-all duration-300",
-                              reward.is_verified ? "text-slate-400 decoration-amber-200 decoration-2 line-through" : "text-amber-900"
-                            )}>
-                              {reward.reward_text}
-                            </h3>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Card Footer Actions */}
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100/80 mt-1">
-                        {reward.is_verified ? (
-                           <button
-                             onClick={(e) => { e.stopPropagation(); setModalAction({ type: 'UNVERIFY', ids: [reward.id], context: 'REWARDS'}); }}
-                             className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-full transition-colors flex items-center gap-1 text-xs font-bold"
-                             title="取消核可"
-                           >
-                             <RotateCcw className="w-4 h-4" />
-                             <span className="text-[11px]">重設</span>
-                           </button>
-                        ) : reward.is_achieved ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleVerifyRewardClick(reward.id); }}
-                            className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-full font-bold text-xs transition-all flex items-center gap-1"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" /> 家長核可
-                          </button>
-                        ) : (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteReward(reward.id); }}
-                            className="p-1.5 text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors"
-                            title="刪除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
+                  {activeRewards.map(renderRewardCard)}
                 </AnimatePresence>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-8 mt-4 rounded-[40px] border-4 border-dashed border-amber-200/50 bg-amber-50/50 max-w-lg mx-auto">
                 <Gift className="w-12 h-12 text-amber-300 mb-3" />
-                <p className="font-black text-lg text-amber-800">未有任何獎勵約定</p>
-                <p className="text-xs font-bold text-amber-600/70 uppercase mb-2">Create your first reward plan</p>
+                <p className="font-black text-lg text-amber-800">未有進行中的獎勵約定</p>
               </div>
+            )}
+
+            {completedRewards.length > 0 && (
+              <section className="mt-10 max-w-lg mx-auto" aria-labelledby="completed-rewards-heading">
+                <div className="mb-4 flex items-center gap-2 px-2">
+                  <Check className="h-5 w-5 text-emerald-500" strokeWidth={3} />
+                  <h3 id="completed-rewards-heading" className="text-slate-500 font-bold text-sm tracking-widest uppercase">已完成獎勵</h3>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-700">{completedRewards.length}</span>
+                </div>
+                <div className="space-y-4">
+                  <AnimatePresence initial={false}>
+                    {completedRewards.map(renderRewardCard)}
+                  </AnimatePresence>
+                </div>
+              </section>
             )}
 
           </div>
