@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
-import { Plus, Check, ShieldCheck, Lock, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
+import { Plus, Check, ShieldCheck, Lock, ChevronDown, ChevronLeft, ChevronRight, X, Trash2, RotateCcw, ListChecks, Gift, Target, ArrowDown, Award, Star, ListTodo } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -266,6 +266,7 @@ export default function App() {
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [showCompletedRewards, setShowCompletedRewards] = useState(false);
   const [loading, setLoading] = useState(true);
   
   const [newTaskText, setNewTaskText] = useState('');
@@ -1103,6 +1104,34 @@ export default function App() {
               </button>
             </div>
 
+            <div className="mx-auto mb-6 max-w-lg">
+              <button
+                id="completed-rewards-button"
+                type="button"
+                aria-expanded={showCompletedRewards}
+                aria-controls="completed-rewards-list"
+                onClick={() => setShowCompletedRewards(isOpen => !isOpen)}
+                className="flex min-h-11 w-full items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-2.5 text-left text-sm font-bold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+              >
+                <Check aria-hidden="true" className="h-5 w-5 shrink-0" strokeWidth={3} />
+                <span>已完成獎勵</span>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs tabular-nums">{completedRewards.length}</span>
+                <ChevronDown aria-hidden="true" className={cn("ml-auto h-4 w-4 shrink-0 transition-transform", showCompletedRewards && "rotate-180")} />
+              </button>
+
+              <section id="completed-rewards-list" aria-labelledby="completed-rewards-button" hidden={!showCompletedRewards} className="mt-4 space-y-4">
+                {showCompletedRewards && (
+                  completedRewards.length > 0 ? (
+                    <AnimatePresence initial={false}>
+                      {completedRewards.map(renderRewardCard)}
+                    </AnimatePresence>
+                  ) : (
+                    <p className="rounded-2xl bg-white/70 px-4 py-3 text-sm text-slate-600">暫時未有已完成的獎勵</p>
+                  )
+                )}
+              </section>
+            </div>
+
             {/* List Rewards */}
             {activeRewards.length > 0 ? (
               <div className="space-y-4 max-w-lg mx-auto">
@@ -1116,22 +1145,6 @@ export default function App() {
                 <p className="font-black text-lg text-amber-800">未有進行中的獎勵約定</p>
               </div>
             )}
-
-            {completedRewards.length > 0 && (
-              <section className="mt-10 max-w-lg mx-auto" aria-labelledby="completed-rewards-heading">
-                <div className="mb-4 flex items-center gap-2 px-2">
-                  <Check className="h-5 w-5 text-emerald-500" strokeWidth={3} />
-                  <h3 id="completed-rewards-heading" className="text-slate-500 font-bold text-sm tracking-widest uppercase">已完成獎勵</h3>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-black text-emerald-700">{completedRewards.length}</span>
-                </div>
-                <div className="space-y-4">
-                  <AnimatePresence initial={false}>
-                    {completedRewards.map(renderRewardCard)}
-                  </AnimatePresence>
-                </div>
-              </section>
-            )}
-
           </div>
         )}
       </div>
