@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, ShoppingCart, MapPin, Pencil, Trash2, X, Lock } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import DeleteConfirmation from './DeleteConfirmation';
 
 interface ShoppingItem { id: string; text: string; is_completed: boolean }
 interface ShoppingList {
@@ -27,6 +28,7 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [removeItemId, setRemoveItemId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<'SAVE' | ShoppingList | null>(null);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -124,7 +126,7 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
           <div className="space-y-3">
             {draft.items.map((item, index) => <div key={item.id} className="flex gap-2 items-center">
               <input aria-label={'第 ' + (index + 1) + ' 件貨物'} className={inputStyle} required maxLength={200} placeholder={'第 ' + (index + 1) + ' 件貨物'} value={item.text} onChange={event => setDraft({ ...draft, items: draft.items.map(row => row.id === item.id ? { ...row, text: event.target.value } : row) })} />
-              <button type="button" aria-label={'刪除第 ' + (index + 1) + ' 件貨物'} disabled={draft.items.length === 1} className="p-3 text-slate-400 hover:text-red-600 disabled:opacity-20" onClick={() => setDraft({ ...draft, items: draft.items.filter(row => row.id !== item.id) })}><X className="w-5 h-5" /></button>
+              <button type="button" aria-label={'刪除第 ' + (index + 1) + ' 件貨物'} disabled={draft.items.length === 1} className="p-3 text-slate-400 hover:text-red-600 disabled:opacity-20" onClick={() => setRemoveItemId(item.id)}><X className="w-5 h-5" /></button>
             </div>)}
           </div>
           <button type="button" disabled={draft.items.length >= 50} onClick={() => setDraft({ ...draft, items: [...draft.items, newItem()] })} className="mt-4 flex items-center gap-2 px-3 py-3 font-bold text-emerald-700 disabled:opacity-40"><Plus className="w-5 h-5" />加一件貨物</button>
@@ -157,6 +159,11 @@ export default function ShoppingLists({ selectedDate, onDateChange }: { selected
           })}
         </div>}
       </>}
+      {removeItemId && <DeleteConfirmation
+        description="請輸入密碼，確認刪除這件貨物。"
+        onConfirm={async () => { setDraft(previous => previous && previous.items.length > 1 ? { ...previous, items: previous.items.filter(item => item.id !== removeItemId) } : previous); }}
+        onClose={() => setRemoveItemId(null)}
+      />}
       {confirmation && <div className="fixed inset-0 z-50 flex items-center justify-center bg-emerald-950/60 backdrop-blur-sm p-4">
         <form onSubmit={confirm} role="dialog" aria-modal="true" aria-labelledby="shopping-confirm-title" className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl">
           <h2 id="shopping-confirm-title" className="text-xl font-black text-emerald-900">家長／老師確認</h2>
