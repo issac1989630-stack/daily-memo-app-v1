@@ -7,6 +7,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from './lib/supabase';
 import ShoppingLists from './ShoppingLists';
+import DeleteConfirmation from './DeleteConfirmation';
 
 // =============== UTILS ===============
 function cn(...inputs: ClassValue[]) {
@@ -285,6 +286,7 @@ export default function App() {
 
   // Modal & Batch state
   const [modalAction, setModalAction] = useState<{ type: 'VERIFY' | 'UNVERIFY', ids: string[], context?: 'TASKS' | 'REWARDS' } | null>(null);
+  const [deleteAction, setDeleteAction] = useState<{ kind: 'task' | 'reward'; id: string; label: string } | { kind: 'draft'; count: number } | null>(null);
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchSelectedIds, setBatchSelectedIds] = useState<string[]>([]);
   
@@ -464,22 +466,25 @@ export default function App() {
     }
   };
   
-    const deleteTask = async (taskId: string) => {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', taskId);
+  const confirmDeletion = async (pin: string) => {
+    if (!deleteAction) return;
+    if (deleteAction.kind === 'draft') {
+      setTaskCountAndInputs(deleteAction.count);
+      return;
+    }
+    const { kind, id } = deleteAction;
+    const { data, error } = await supabase.rpc('memo_move_to_trash', {
+      p_kind: kind, p_id: id, p_pin: pin,
+    });
+    if (error || data !== true) {
+      throw new Error(error?.message.includes('PIN_INCORRECT')
+        ? '密碼不正確，請重新輸入。' : '未能移至垃圾桶，資料仍保留，請重試。');
+    }
+    if (kind === 'task') setTasks(previous => previous.filter(task => task.id !== id));
+    else setRewards(previous => previous.filter(reward => reward.id !== id));
+    setStatusMessage(null);
+  };
 
-      if (error) {
-        console.error('Error moving task to trash:', error);
-        setStatusMessage('未能移至垃圾桶，資料仍保留，請重試。');
-        return;
-      }
-
-      setTasks(prev => prev.filter(task => task.id !== taskId));
-      setStatusMessage(null);
-    };
-  
     const startEditing = (task: Task) => {
       setEditingTaskId(task.id);
       setEditTaskText(task.text);
@@ -517,7 +522,7 @@ export default function App() {
 
   const setTaskCountAndInputs = (count: number) => {
     setTaskCount(count);
-    setTaskInputs(Array(count).fill(''));
+    setTaskInputs(previous => Array.from({ length: count }, (_, index) => previous[index] ?? ''));
   };
 
   const handleAddReward = async (e: React.FormEvent) => {
@@ -533,7 +538,8 @@ export default function App() {
     };
 
     setNewRewardText('');
-    setTaskCountAndInputs(1);
+    setTaskCount(1);
+    setTaskInputs(['']);
     setIsRewardModalOpen(false);
 
     const { data, error } = await supabase.from('rewards').insert([rewardData]).select();
@@ -642,21 +648,6 @@ export default function App() {
 
     const { error } = await supabase.from('rewards').update({ is_achieved: !reward.is_achieved }).eq('id', rewardId);
     if (error) fetchData();
-  };
-
-  const deleteReward = async (rewardId: string) => {
-    const { error } = await supabase.from('rewards')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', rewardId);
-
-    if (error) {
-      console.error('Error moving reward to trash:', error);
-      setStatusMessage('未能移至垃圾桶，資料仍保留，請重試。');
-      return;
-    }
-
-    setRewards(prev => prev.filter(reward => reward.id !== rewardId));
-    setStatusMessage(null);
   };
 
   const handleVerifyRewardClick = (rewardId: string) => {
@@ -816,7 +807,7 @@ export default function App() {
                           </button>
                         ) : (
                           <button
-                            onClick={(e) => { e.stopPropagation(); deleteReward(reward.id); }}
+                            onClick={(e) => { e.stopPropagation(); setDeleteAction({ kind: 'reward', id: reward.id, label: reward.reward_text }); }}
                             className="p-1.5 text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded-full transition-colors"
                             title="刪除"
                           >
@@ -1034,7 +1025,7 @@ export default function App() {
                         {/* Delete button: Available for all non-verified tasks */}
                         {!task.is_verified && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
+                            onClick={(e) => { e.stopPropagation(); setDeleteAction({ kind: 'task', id: task.id, label: task.text }); }}
                             className="p-1.5 sm:p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                             title="刪除任務"
                           >
@@ -1173,6 +1164,12 @@ export default function App() {
         )}
       </div>
 
+      {deleteAction && <DeleteConfirmation
+        description={deleteAction.kind === 'draft' ? '請輸入密碼，確認刪除減少的獎勵任務欄位。' : '請輸入密碼，確認將「' + deleteAction.label + '」移至垃圾桶。'}
+        onConfirm={confirmDeletion}
+        onClose={() => setDeleteAction(null)}
+      />}
+
       {/* Verification Modal */}
       <AnimatePresence>
         {modalAction && (
@@ -1228,7 +1225,7 @@ export default function App() {
                        <button
                          type="button"
                          key={count}
-                         onClick={() => setTaskCountAndInputs(count)}
+                         onClick={() => { if (count < taskCount) setDeleteAction({ kind: 'draft', count }); else setTaskCountAndInputs(count); }}
                          className={cn("flex-1 py-3 rounded-2xl font-black transition-all", taskCount === count ? "bg-amber-400 text-amber-950" : "bg-slate-100 text-slate-600")}
                        >{count} 次</button>
                      ))}
